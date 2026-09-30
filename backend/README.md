@@ -880,13 +880,16 @@ From the separate frontend repository, generate TypeScript definitions instead
 of recreating DTOs manually. For example, using **openapi-typescript 7**:
 
 ```sh
-npx openapi-typescript ../rc-setup-hub/backend/api/openapi.yaml -o src/generated/api.d.ts
-# Alternatively, while the backend is running:
-npx openapi-typescript http://localhost:8080/openapi.yaml -o src/generated/api.d.ts
+# Copy backend/api/openapi.yaml into this frontend repository's api/openapi.yaml,
+# or obtain it from a running backend (create the api directory first):
+curl --fail http://localhost:8080/openapi.yaml -o api/openapi.yaml
+# Commit the frontend's own contract copy, then generate reproducibly:
+npx openapi-typescript api/openapi.yaml -o src/generated/api.d.ts
 ```
 
-Choose the file path appropriate to the separate frontend checkout. Generated
-TypeScript belongs there, not in this backend. The cursor is an opaque string;
+Frontend/backend repositories may live anywhere; no sibling checkout is assumed.
+Keep the frontend contract copy committed. Generated TypeScript belongs in the
+frontend repository, not in this backend. The cursor is an opaque string;
 clients must repeat search filters and pass `next_cursor` unchanged. Search
 contains public summaries only, never friends/private rows, technical data or
 notes. Historical inactive chassis remain searchable. Setup details use schema
@@ -941,3 +944,15 @@ check endpoint/schema/privacy coverage, and validate representative serialized G
 DTOs and PATCH/create bodies. Focused fake-Google/real-PostgreSQL tests also verify
 the frontend redirect, issued-session `/me`, and exact credentialed CORS. No live
 Google account/network request is needed for these tests.
+
+
+Direct frontend routes can reload without navigation state. Authenticated
+GET /api/v1/users/{user_id} returns id, nickname and nullable avatar_url only;
+invalid UUID is 400, missing user 404, no session 401, unexpected failure generic
+500. Full Setup responses include owner_id (application UUID) and a read-only
+chassis projection containing model_id/model_name/brand_id/brand_name. Resolve
+the owner through the public-profile endpoint; owner email/provider identity is
+never included. Historical inactive catalog rows still display through the joined
+projection in details and lists; custom/unlisted setups have chassis:null.
+Active selection APIs and new-selection validation are unchanged. Setup lists
+use joins without N+1, and detail authorization still precedes protected decoding.

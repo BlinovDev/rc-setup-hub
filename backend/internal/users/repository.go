@@ -45,3 +45,13 @@ func scan(row pgx.Row) (User, error) {
 	u.CreatedAt = u.CreatedAt.UTC()
 	return u, err
 }
+
+// GetPublic selects no email or provider identity fields.
+func (r *Repository) GetPublic(ctx context.Context, id string) (PublicProfile, error) {
+	var profile PublicProfile
+	err := r.pool.QueryRow(ctx, `SELECT id::text,nickname,avatar_url FROM users WHERE id=$1`, id).Scan(&profile.ID, &profile.Nickname, &profile.AvatarURL)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return PublicProfile{}, ErrNotFound
+	}
+	return profile, err
+}

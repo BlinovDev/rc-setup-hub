@@ -68,12 +68,17 @@ func setupResponse(t *testing.T, w *httptest.ResponseRecorder, status int) Setup
 	if w.Code != status {
 		t.Fatalf("HTTP %d want %d: %s", w.Code, status, w.Body)
 	}
-	if strings.Contains(w.Body.String(), "owner_id") {
-		t.Fatal("owner ID exposed", w.Body)
+	for _, field := range []string{`"email":`, `"google_subject":`} {
+		if strings.Contains(w.Body.String(), field) {
+			t.Fatal("private owner information exposed", w.Body)
+		}
 	}
 	var setup Setup
 	if err := json.Unmarshal(w.Body.Bytes(), &setup); err != nil {
 		t.Fatal(err)
+	}
+	if setup.OwnerID == "" {
+		t.Fatal("missing owner ID", w.Body)
 	}
 	return setup
 }
@@ -102,7 +107,7 @@ func TestSetupHTTP(t *testing.T) {
 	body := `{"title":" Private setup ","chassis_model_id":null,"visibility":"private","notes":"Original notes","data":` + realisticJSON + `}`
 	createdResponse := request(router, "POST", "/api/v1/setups", body, ownerCookie)
 	created := setupResponse(t, createdResponse, 201)
-	if created.SchemaVersion != 1 || created.ChassisModelID != nil || created.Title != "Private setup" || created.Visibility != Private || created.Data.Suspension.Rear.ToeDeg == nil || *created.Data.Suspension.Rear.ToeDeg != 0 {
+	if created.OwnerID != owner.ID || created.Chassis != nil || created.SchemaVersion != 1 || created.ChassisModelID != nil || created.Title != "Private setup" || created.Visibility != Private || created.Data.Suspension.Rear.ToeDeg == nil || *created.Data.Suspension.Rear.ToeDeg != 0 {
 		t.Fatal("create fields", created)
 	}
 	var storedOwner string
@@ -167,7 +172,43 @@ func TestSetupHTTP(t *testing.T) {
 		t.Fatal("inactive model create", w.Code)
 	}
 	historyPath := "/api/v1/setups/" + historical.ID
-	setupResponse(t, request(router, "GET", historyPath, "", ownerCookie), 200)
+	historicalRead := setupResponse(t, request(router, "GET", historyPath, "", ownerCookie), 200)
+	expectedChassis := SearchChassis{ModelID: model.ID, ModelName: "RD2.0", BrandID: brand.ID, BrandName: "Yokomo"}
+	if historicalRead.Chassis == nil || *historicalRead.Chassis != expectedChassis {
+		t.Fatal("historical model display missing", historicalRead)
+	}
+	if _, err := catalog.SetBrandActive(ctx, brand.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	historicalRead = setupResponse(t, request(router, "GET", historyPath, "", ownerCookie), 200)
+	if historicalRead.Chassis == nil || *historicalRead.Chassis != expectedChassis {
+		t.Fatal("historical brand display missing", historicalRead)
+	}
+	for _, listPath := range []string{"/api/v1/me/setups", "/api/v1/users/" + owner.ID + "/setups"} {
+		w := request(router, "GET", listPath, "", ownerCookie)
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body)
+		}
+		var items []Setup
+		if err := json.Unmarshal(w.Body.Bytes(), &items); err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, item := range items {
+			if item.OwnerID != owner.ID {
+				t.Fatal("wrong list owner", item)
+			}
+			if item.ID == historical.ID {
+				found = true
+				if item.Chassis == nil || *item.Chassis != expectedChassis {
+					t.Fatal("historical list display missing", item)
+				}
+			}
+		}
+		if !found || strings.Contains(w.Body.String(), `"email":`) || strings.Contains(w.Body.String(), `"google_subject":`) {
+			t.Fatal("unsafe or incomplete setup list", w.Body)
+		}
+	}
 	history := setupResponse(t, request(router, "PATCH", historyPath, `{"title":"History","notes":"Kept","data":{}}`, ownerCookie), 200)
 	if history.ChassisModelID == nil || *history.ChassisModelID != model.ID {
 		t.Fatal("inactive reference erased")
@@ -176,7 +217,7 @@ func TestSetupHTTP(t *testing.T) {
 		t.Fatal("new inactive selection allowed", w.Code)
 	}
 	history = setupResponse(t, request(router, "PATCH", historyPath, `{"chassis_model_id":null}`, ownerCookie), 200)
-	if history.ChassisModelID != nil {
+	if history.ChassisModelID != nil || history.Chassis != nil {
 		t.Fatal("null did not clear chassis")
 	}
 	if _, err := catalog.SetModelActive(ctx, model.ID, true); err != nil {

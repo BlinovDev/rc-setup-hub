@@ -51,7 +51,7 @@ func TestOpenAPIContract(t *testing.T) {
 	}
 	for path, methods := range map[string][]string{
 		"/health": {"get"}, "/openapi.yaml": {"get"}, "/auth/google": {"get"}, "/auth/google/callback": {"get"},
-		"/api/v1/auth/logout": {"post"}, "/api/v1/me": {"get", "patch"}, "/api/v1/users/search": {"get"},
+		"/api/v1/users/{user_id}": {"get"}, "/api/v1/auth/logout": {"post"}, "/api/v1/me": {"get", "patch"}, "/api/v1/users/search": {"get"},
 		"/api/v1/friendships": {"get", "post"}, "/api/v1/friendships/{id}/accept": {"post"}, "/api/v1/friendships/{id}": {"delete"},
 		"/api/v1/chassis/brands": {"get"}, "/api/v1/chassis/brands/{brand_id}/models": {"get"},
 		"/api/v1/setups": {"post"}, "/api/v1/setups/{id}": {"get", "patch", "delete"},
@@ -102,6 +102,9 @@ func TestOpenAPIContract(t *testing.T) {
 		if schemas[name]["additionalProperties"] != false {
 			t.Fatalf("%s permits unknown fields", name)
 		}
+	}
+	if props("Setup")["owner_id"] == nil || props("Setup")["chassis"] == nil {
+		t.Fatal("Setup lacks direct-link owner/chassis metadata")
 	}
 	if _, required := schemas["PatchSetup"]["required"]; required {
 		t.Fatal("PATCH fields must be optional")

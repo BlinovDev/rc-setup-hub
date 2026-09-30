@@ -153,11 +153,12 @@ func TestHistoricalChassis(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := service.Get(ctx, owner.ID, original.ID); err != nil {
-				t.Fatal("history unreadable", err)
+			historical, err := service.Get(ctx, owner.ID, original.ID)
+			if err != nil || historical.Chassis == nil || historical.Chassis.ModelID != model.ID || historical.Chassis.ModelName != model.Name || historical.Chassis.BrandID != brand.ID || historical.Chassis.BrandName != brand.Name {
+				t.Fatal("historical display lost", historical, err)
 			}
 			updated, err := service.Patch(ctx, owner.ID, original.ID, PatchInput{Title: NullableString{Present: true, Value: stringPtr("Historical title")}, Notes: NullableString{Present: true, Value: stringPtr("Note")}, Data: OptionalData{Present: true, Value: &DataV1{}}})
-			if err != nil || updated.ChassisModelID == nil || *updated.ChassisModelID != model.ID {
+			if err != nil || updated.ChassisModelID == nil || *updated.ChassisModelID != model.ID || updated.Chassis == nil || updated.Chassis.BrandName != brand.Name {
 				t.Fatal("historical reference lost", updated, err)
 			}
 			if _, err := service.Patch(ctx, owner.ID, original.ID, PatchInput{ChassisModelID: NullableString{Present: true, Value: &model.ID}}); err != nil {

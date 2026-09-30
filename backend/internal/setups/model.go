@@ -66,16 +66,17 @@ type Electronics struct {
 	Radio string `json:"radio,omitempty"`
 }
 type Setup struct {
-	ID             string     `json:"id"`
-	OwnerID        string     `json:"-"`
-	ChassisModelID *string    `json:"chassis_model_id"`
-	Title          string     `json:"title"`
-	Visibility     Visibility `json:"visibility"`
-	Data           DataV1     `json:"data"`
-	Notes          *string    `json:"notes"`
-	SchemaVersion  int        `json:"schema_version"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID             string         `json:"id"`
+	OwnerID        string         `json:"owner_id"`
+	ChassisModelID *string        `json:"chassis_model_id"`
+	Chassis        *SearchChassis `json:"chassis"`
+	Title          string         `json:"title"`
+	Visibility     Visibility     `json:"visibility"`
+	Data           DataV1         `json:"data"`
+	Notes          *string        `json:"notes"`
+	SchemaVersion  int            `json:"schema_version"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
 }
 type CreateInput struct {
 	Title          string     `json:"title"`

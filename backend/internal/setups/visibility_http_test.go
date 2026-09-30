@@ -106,7 +106,7 @@ func TestVisibilityHTTP(t *testing.T) {
 					}
 					if w.Code == 200 {
 						got := setupResponse(t, w, 200)
-						if got.ID != s.ID {
+						if got.ID != s.ID || got.OwnerID != owner.id {
 							t.Fatal("wrong setup")
 						}
 					}

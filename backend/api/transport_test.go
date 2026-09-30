@@ -32,6 +32,9 @@ func TestTransportContract(t *testing.T) {
 	zero := 0.0
 	profile := users.PublicProfile{ID: id, Nickname: "Driver"}
 	setup := setups.Setup{ID: id, OwnerID: id, Title: "Track setup", Visibility: setups.Private, SchemaVersion: 1, CreatedAt: now, UpdatedAt: now, Data: setups.DataV1{Suspension: &setups.Suspension{Front: &setups.AxleSuspension{ToeDeg: &zero}}}}
+	historical := setup
+	historical.ChassisModelID = &id
+	historical.Chassis = &setups.SearchChassis{ModelID: id, ModelName: "RD2.0", BrandID: id, BrandName: "Yokomo"}
 	relationship := friendships.Relationship{ID: id, RequesterID: id, AddresseeID: "22222222-2222-4222-8222-222222222222", Status: friendships.Pending, CreatedAt: now, UpdatedAt: now}
 	item := friendships.Item{ID: id, User: profile, CreatedAt: now, UpdatedAt: now}
 	summary := setups.SearchItem{ID: id, Title: "Public setup", Visibility: setups.Public, SchemaVersion: 1, CreatedAt: now, UpdatedAt: now, Owner: profile}
@@ -41,8 +44,11 @@ func TestTransportContract(t *testing.T) {
 	}{
 		{"/api/v1/me", users.User{ID: id, Email: "driver@example.com", Nickname: "Driver", CreatedAt: now}},
 		{"/api/v1/users/search", []users.PublicProfile{profile}},
+		{"/api/v1/users/" + id, profile},
 		{"/api/v1/setups/" + id, setup},
-		{"/api/v1/me/setups", []setups.Setup{setup}},
+		{"/api/v1/me/setups", []setups.Setup{setup, historical}},
+		{"/api/v1/setups/" + id, historical},
+		{"/api/v1/users/" + id + "/setups", []setups.Setup{historical}},
 		{"/api/v1/friendships", friendships.List{Incoming: []friendships.Item{item}, Outgoing: []friendships.Item{}, Accepted: []friendships.Item{}}},
 		{"/api/v1/setups/search", setups.SearchPage{Items: []setups.SearchItem{summary}}},
 		{"/api/v1/setups/search", setups.SearchPage{Items: []setups.SearchItem{}}},
