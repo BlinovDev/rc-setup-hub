@@ -1,4 +1,4 @@
-# Backend — Phase 6
+# Backend — Phase 7
 
 ## Local PostgreSQL
 
@@ -354,9 +354,8 @@ GET    /api/v1/me/setups       -> 200, array (newest created first)
 
 Responses include id, chassis_model_id, title, visibility, data, notes,
 schema_version, created_at and updated_at. Owner ID is internal and never
-accepted from clients. Every repository read/update/delete constrains ownership;
-missing and other users' setups both return 404. This applies even to public
-setups: sharing is not implemented in Phase 6.
+accepted from clients. Phase 6 used owner-only reads; Phase 7 below extends read access by visibility.
+Updates and deletes remain owner-scoped.
 
 DataV1 has optional Suspension, Shocks and Electronics sections. Suspension has
 optional Front/Rear AxleSuspension values with camber_deg, caster_deg, toe_deg
@@ -436,3 +435,90 @@ automatically applied migrations and fake Google identities. They cover typed
 JSONB persistence, numeric zero, schema ownership, strict input validation,
 partial updates, ownership, catalog activation/history, listing and deletion.
 Run `go test ./...` and `go test -race ./...` with Docker available.
+
+## Phase 7 setup visibility
+
+All setup routes still require authentication. Public means visible to any
+signed-in application user; no anonymous access or public search was added.
+The central read policy is `internal/setups/visibility.go`: owners may view
+public/friends/private, accepted friends public/friends, and unrelated or pending
+friends public only. Unknown visibility fails closed.
+
+`GET /api/v1/setups/{id}` fetches the setup and applies that policy. Friendship
+is queried only when it could change the decision. Missing/inaccessible setups
+return identical 404 responses. `GET /api/v1/users/{user_id}/setups` checks the
+caller/target relationship once, then passes the policy's allowed visibility
+values to an explicit SQL `visibility=ANY(...)` filter. Rows that are private
+or otherwise inaccessible are never loaded or decoded. Ordering is
+created_at DESC, id DESC. Empty results and unknown valid user IDs return `[]`;
+malformed user IDs return 400. No pagination was added.
+
+`internal/friendships/repository.go` implements only an accepted-pair lookup.
+It queries the unordered UUID pair with LEAST/GREATEST and status='accepted',
+matching the existing unique expression index. No friendship management routes
+exist yet. Relationships are checked afresh on requests; no cache delays
+acceptance or removal. Listing uses at most one friendship lookup and one setup
+query regardless of list size. `/me/setups` needs no friendship lookup.
+
+PATCH explicitly reads through GetOwned, and update/delete SQL still constrains
+both ID and owner ID. Broader read permission never grants mutation permission.
+Creation still takes ownership from the application session. There are no new
+migrations, configuration variables or dependencies.
+
+Manual two-user test (development database only):
+
+1. Sign in as A in a normal browser and B in an incognito/separate browser.
+   Open `http://localhost:8080/api/v1/me` in each and record their IDs.
+2. In A's developer console, define the `call` function from Phase 6 above and
+   create one setup of each visibility:
+
+   ```javascript
+   const a = await call('/me');
+   const examples = [];
+   for (const visibility of ['public', 'friends', 'private']) {
+     examples.push(await call('/setups', 'POST', {
+       title: `A ${visibility}`, visibility, chassis_model_id: null, data: {}
+     }));
+   }
+   console.log(JSON.stringify({owner: a.id, setups: examples.map(s => ({id: s.id, visibility: s.visibility}))}));
+   ```
+
+3. Copy A's ID and the three setup IDs. In B's console define `call`, then run
+   `await call('/users/A_UUID/setups')`, substituting A's UUID. With no accepted
+   friendship, only A's public setups appear. Detail GET of the public ID returns
+   200; friends/private IDs return 404.
+4. From backend/, open the local database:
+
+   ```bash
+   docker compose exec postgres psql -U rc_setup_dev -d rc_setup_hub
+   ```
+
+   Substitute the real IDs in these psql commands. This prepares test data
+   directly without implementing Phase 8 endpoints:
+
+   ```sql
+   \set a 'A_UUID'
+   \set b 'B_UUID'
+   INSERT INTO friendships(requester_id,addressee_id,status)
+   VALUES(:'a'::uuid,:'b'::uuid,'accepted') ON CONFLICT DO NOTHING;
+   UPDATE friendships SET status='accepted',updated_at=now()
+   WHERE LEAST(requester_id,addressee_id)=LEAST(:'a'::uuid,:'b'::uuid)
+     AND GREATEST(requester_id,addressee_id)=GREATEST(:'a'::uuid,:'b'::uuid);
+   ```
+
+5. Repeat B's list: public + friends are now returned, private is absent.
+   Detail GET of the friends ID is 200; private remains 404.
+6. In B's console, run both requests for each of A's three setup IDs:
+
+   ```javascript
+   await call('/setups/SETUP_UUID', 'PATCH', {title: 'Forbidden'});
+   await call('/setups/SETUP_UUID', 'DELETE');
+   ```
+
+   Each fails with 404, including public/friends setups B can read. A can still
+   edit/delete them using the same requests from A's browser.
+
+Tests use real migrated PostgreSQL containers and application sessions with fake
+Google identities. They cover the complete visibility matrix, both request
+orientations, pending/accepted/removed states, filtered newest-first listings,
+identical missing/private errors, authentication and owner-only write regressions.

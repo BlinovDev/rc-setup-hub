@@ -15,6 +15,7 @@ import (
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/chassis"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/config"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/database/dbtest"
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/friendships"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/web"
 )
@@ -80,7 +81,7 @@ func TestSetupHTTP(t *testing.T) {
 	pool := dbtest.New(t)
 	ctx := context.Background()
 	catalog := chassis.NewService(chassis.NewRepository(pool))
-	service := NewService(NewRepository(pool), catalog)
+	service := NewService(NewRepository(pool), catalog, friendships.NewRepository(pool))
 	cfg := config.Auth{GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SessionSecret: bytes.Repeat([]byte("s"), 32), SameSite: http.SameSiteLaxMode, AllowedOrigins: []string{"http://localhost:5173"}}
 	provider := &fakeGoogle{identity: users.Identity{Subject: "owner", Email: "owner@example.com", Name: "Owner"}}
 	authentication := auth.NewHandler(cfg, provider, users.NewService(users.NewRepository(pool)))
@@ -190,7 +191,7 @@ func TestSetupHTTP(t *testing.T) {
 	provider.identity = users.Identity{Subject: "other", Email: "other@example.com", Name: "Other"}
 	otherCookie := login(t, router)
 	foreign := setupResponse(t, request(router, "POST", "/api/v1/setups", `{"title":"Foreign","visibility":"public","data":{}}`, otherCookie), 201)
-	for _, method := range []string{"GET", "PATCH", "DELETE"} {
+	for _, method := range []string{"PATCH", "DELETE"} {
 		if w := request(router, method, path, `{}`, otherCookie); w.Code != 404 {
 			t.Fatal("non-owner public setup access", method, w.Code, w.Body)
 		}

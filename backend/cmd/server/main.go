@@ -15,6 +15,7 @@ import (
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/chassis"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/config"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/database"
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/friendships"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/setups"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/web"
@@ -58,7 +59,7 @@ func main() {
 		logger.Error("catalog initialization failed")
 		os.Exit(1)
 	}
-	setupService := setups.NewService(setups.NewRepository(pool), catalog)
+	setupService := setups.NewService(setups.NewRepository(pool), catalog, friendships.NewRepository(pool))
 	setupHandler := setups.NewHandler(setupService)
 	authHandler.Register(router, catalogHandler.RegisterAPI, setupHandler.RegisterAPI)
 	adminHandler, err := admin.New(authConfig)

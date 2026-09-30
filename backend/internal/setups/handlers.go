@@ -14,13 +14,27 @@ type Handler struct{ service *Service }
 
 func NewHandler(service *Service) *Handler { return &Handler{service: service} }
 
-// RegisterAPI mounts only authenticated, owner-scoped setup routes.
+// RegisterAPI mounts authenticated setup routes; mutations remain owner-only.
 func (h *Handler) RegisterAPI(r chi.Router) {
 	r.Post("/setups", h.create)
 	r.Get("/setups/{id}", h.get)
 	r.Patch("/setups/{id}", h.patch)
 	r.Delete("/setups/{id}", h.delete)
 	r.Get("/me/setups", h.list)
+	r.Get("/users/{user_id}/setups", h.listUser)
+}
+
+func (h *Handler) listUser(w http.ResponseWriter, r *http.Request) {
+	id, ok := owner(w, r)
+	if !ok {
+		return
+	}
+	setups, err := h.service.ListUser(r.Context(), id, chi.URLParam(r, "user_id"))
+	if err != nil {
+		failure(w, err)
+		return
+	}
+	respond(w, 200, setups)
 }
 func respond(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")

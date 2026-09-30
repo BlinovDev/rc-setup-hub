@@ -62,8 +62,22 @@ func (r *Repository) Create(ctx context.Context, ownerID string, s Setup) (Setup
 func (r *Repository) GetOwned(ctx context.Context, ownerID, id string) (Setup, error) {
 	return scan(r.pool.QueryRow(ctx, `SELECT `+columns+` FROM setups WHERE id=$1 AND owner_id=$2`, id, ownerID))
 }
+
+func (r *Repository) Get(ctx context.Context, id string) (Setup, error) {
+	return scan(r.pool.QueryRow(ctx, `SELECT `+columns+` FROM setups WHERE id=$1`, id))
+}
+
 func (r *Repository) ListOwned(ctx context.Context, ownerID string) ([]Setup, error) {
-	rows, err := r.pool.Query(ctx, `SELECT `+columns+` FROM setups WHERE owner_id=$1 ORDER BY created_at DESC,id DESC`, ownerID)
+	return r.ListVisible(ctx, ownerID, VisibleVisibilities(ownerID, ownerID, false))
+}
+
+// ListVisible filters in PostgreSQL, before decoding any setup documents.
+func (r *Repository) ListVisible(ctx context.Context, ownerID string, allowed []Visibility) ([]Setup, error) {
+	values := make([]string, len(allowed))
+	for i, visibility := range allowed {
+		values[i] = string(visibility)
+	}
+	rows, err := r.pool.Query(ctx, `SELECT `+columns+` FROM setups WHERE owner_id=$1 AND visibility=ANY($2::text[]) ORDER BY created_at DESC,id DESC`, ownerID, values)
 	if err != nil {
 		return nil, err
 	}
