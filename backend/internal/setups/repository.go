@@ -63,8 +63,25 @@ func (r *Repository) GetOwned(ctx context.Context, ownerID, id string) (Setup, e
 	return scan(r.pool.QueryRow(ctx, `SELECT `+columns+` FROM setups WHERE id=$1 AND owner_id=$2`, id, ownerID))
 }
 
-func (r *Repository) Get(ctx context.Context, id string) (Setup, error) {
-	return scan(r.pool.QueryRow(ctx, `SELECT `+columns+` FROM setups WHERE id=$1`, id))
+type accessMetadata struct {
+	OwnerID    string
+	Visibility Visibility
+}
+
+// getAccess reads only authorization metadata, never protected data or its schema.
+func (r *Repository) getAccess(ctx context.Context, id string) (accessMetadata, error) {
+	var access accessMetadata
+	err := r.pool.QueryRow(ctx, `SELECT owner_id::text,visibility FROM setups WHERE id=$1`, id).Scan(&access.OwnerID, &access.Visibility)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return accessMetadata{}, ErrNotFound
+	}
+	return access, err
+}
+
+// getAuthorized decodes only a row whose metadata still matches the authorized read.
+// A visibility or owner change between reads fails closed, including more restrictive changes.
+func (r *Repository) getAuthorized(ctx context.Context, id string, access accessMetadata) (Setup, error) {
+	return scan(r.pool.QueryRow(ctx, `SELECT `+columns+` FROM setups WHERE id=$1 AND owner_id=$2 AND visibility=$3`, id, access.OwnerID, access.Visibility))
 }
 
 func (r *Repository) ListOwned(ctx context.Context, ownerID string) ([]Setup, error) {

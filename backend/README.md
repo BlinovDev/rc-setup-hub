@@ -444,9 +444,14 @@ The central read policy is `internal/setups/visibility.go`: owners may view
 public/friends/private, accepted friends public/friends, and unrelated or pending
 friends public only. Unknown visibility fails closed.
 
-`GET /api/v1/setups/{id}` fetches the setup and applies that policy. Friendship
-is queried only when it could change the decision. Missing/inaccessible setups
-return identical 404 responses. `GET /api/v1/users/{user_id}/setups` checks the
+`GET /api/v1/setups/{id}` reads only owner/visibility metadata and applies that
+policy before loading protected data or checking its schema version. Friendship
+is queried only when it could change the decision. The full-row SQL requires the
+owner and visibility to still match the authorized metadata; a change between
+reads fails closed with 404 before decoding. Owners still receive a generic 500
+for unsupported schemas or corrupt documents they are authorized to read.
+Missing/inaccessible setups return identical 404 responses.
+`GET /api/v1/users/{user_id}/setups` checks the
 caller/target relationship once, then passes the policy's allowed visibility
 values to an explicit SQL `visibility=ANY(...)` filter. Rows that are private
 or otherwise inaccessible are never loaded or decoded. Ordering is

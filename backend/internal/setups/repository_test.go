@@ -180,3 +180,54 @@ func TestHistoricalChassis(t *testing.T) {
 		})
 	}
 }
+
+func TestDetailMetadataChangeFailsClosed(t *testing.T) {
+	pool := dbtest.New(t)
+	ctx := context.Background()
+	repo := NewRepository(pool)
+	userService := users.NewService(users.NewRepository(pool))
+	owner, err := userService.Login(ctx, users.Identity{Subject: "owner", Email: "owner@example.com", Name: "Owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := userService.Login(ctx, users.Identity{Subject: "other", Email: "other@example.com", Name: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name          string
+		before, after Visibility
+		ownerAfter    string
+	}{
+		{"public becomes friends", Public, Friends, owner.ID},
+		{"public becomes private", Public, Private, owner.ID},
+		{"friends becomes private", Friends, Private, owner.ID},
+		{"owner changes", Private, Private, other.ID},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setup, err := repo.Create(ctx, owner.ID, Setup{Title: tc.name, Visibility: tc.before, Data: DataV1{}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			access, err := repo.getAccess(ctx, setup.ID)
+			if err != nil || access.OwnerID != owner.ID || access.Visibility != tc.before {
+				t.Fatal("access metadata", access, err)
+			}
+			// Simulate a committed change after policy evaluation and before the full read.
+			// Corrupt schema/data also proves the second query excludes the row before decoding.
+			if _, err := pool.Exec(ctx, `UPDATE setups SET owner_id=$2,visibility=$3,schema_version=2,data='[]'::jsonb WHERE id=$1`, setup.ID, tc.ownerAfter, tc.after); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := repo.getAuthorized(ctx, setup.ID, access); !errors.Is(err, ErrNotFound) {
+				t.Fatalf("stale authorization returned row/schema error: %v", err)
+			}
+			current, err := repo.getAccess(ctx, setup.ID)
+			if err != nil || current.OwnerID != tc.ownerAfter || current.Visibility != tc.after {
+				t.Fatal("new access metadata", current, err)
+			}
+			if _, err := repo.getAuthorized(ctx, setup.ID, current); !errors.Is(err, ErrUnsupportedSchema) {
+				t.Fatalf("authorized schema error lost: %v", err)
+			}
+		})
+	}
+}

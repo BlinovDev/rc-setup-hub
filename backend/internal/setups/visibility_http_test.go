@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -148,6 +149,63 @@ func TestVisibilityHTTP(t *testing.T) {
 		t.Fatal("removed friendship still grants access", w.Code)
 	}
 	assertList(pending.cookie, listPath, []string{setups[0].ID})
+	// Inaccessible documents must be denied before schema checks or typed decoding.
+	for _, corruption := range []struct {
+		name    string
+		version int
+		data    string
+	}{
+		{"unsupported schema", 2, `{}`},
+		{"undecodable data", 1, `{"electronics":{"motor":42}}`},
+	} {
+		for _, setup := range setups[1:] {
+			t.Run(corruption.name+"/"+string(setup.Visibility), func(t *testing.T) {
+				if _, err := pool.Exec(ctx, `UPDATE setups SET schema_version=$2,data=$3::jsonb WHERE id=$1`, setup.ID, corruption.version, corruption.data); err != nil {
+					t.Fatal(err)
+				}
+				path := "/api/v1/setups/" + setup.ID
+				denied := []account{other, pending}
+				if setup.Visibility == Private {
+					denied = append(denied, friend, reverse)
+				}
+				for _, caller := range denied {
+					missing := request(router, "GET", "/api/v1/setups/"+unknown, "", caller.cookie)
+					inaccessible := request(router, "GET", path, "", caller.cookie)
+					if missing.Code != 404 || inaccessible.Code != 404 || missing.Body.String() != inaccessible.Body.String() || missing.Header().Get("Content-Type") != inaccessible.Header().Get("Content-Type") || missing.Header().Get("Cache-Control") != inaccessible.Header().Get("Cache-Control") {
+						t.Fatalf("protected corrupt document revealed: %d %s", inaccessible.Code, inaccessible.Body)
+					}
+					if _, err := service.Get(ctx, caller.id, setup.ID); !errors.Is(err, ErrNotFound) {
+						t.Fatalf("unauthorized service read: %v", err)
+					}
+					for _, method := range []string{"PATCH", "DELETE"} {
+						if w := request(router, method, path, `{"title":"Forbidden"}`, caller.cookie); w.Code != 404 {
+							t.Fatal("corrupt non-owner mutation", method, w.Code, w.Body)
+						}
+					}
+				}
+				_, err := service.Get(ctx, owner.id, setup.ID)
+				if corruption.version == 2 {
+					if !errors.Is(err, ErrUnsupportedSchema) {
+						t.Fatalf("owner schema error lost: %v", err)
+					}
+				} else {
+					var decodeErr *json.UnmarshalTypeError
+					if !errors.As(err, &decodeErr) {
+						t.Fatalf("owner decode error lost: %v", err)
+					}
+				}
+				if w := request(router, "GET", path, "", owner.cookie); w.Code != 500 || w.Body.String() != "{\"error\":\"setup operation failed\"}\n" {
+					t.Fatal("owner internal error response", w.Code, w.Body)
+				}
+				if _, err := pool.Exec(ctx, `UPDATE setups SET schema_version=1,data='{}'::jsonb WHERE id=$1`, setup.ID); err != nil {
+					t.Fatal(err)
+				}
+			})
+		}
+	}
+	// Restored documents remain readable by owners, public readers and accepted friends.
+	setupResponse(t, request(router, "GET", "/api/v1/setups/"+setups[0].ID, "", other.cookie), 200)
+	setupResponse(t, request(router, "GET", friendsPath, "", friend.cookie), 200)
 	// Friends and public readers must never acquire mutation permissions.
 	for _, caller := range []account{friend, reverse, other} {
 		for _, s := range setups {
