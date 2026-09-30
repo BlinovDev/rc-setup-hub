@@ -56,7 +56,19 @@ Every setup has `schema_version`. Initial value is `1`.
 
 ## Client and admin boundary
 
-The user client is a separate application and communicates with the backend JSON API over CORS.
+The user client is a separate React application in its own repository and
+communicates with the backend JSON API over exact credentialed CORS. Frontend
+requests use credentials: "include" with the backend-managed HttpOnly session
+cookie; frontend JavaScript never receives/stores Google/backend auth tokens.
+Normal backend startup requires trusted APP_URL; successful Google login creates
+the session and redirects there. ALLOWED_ORIGINS is independently configured.
+
+The machine-readable frontend contract is backend/api/openapi.yaml, also served
+at GET /openapi.yaml. The frontend copies/downloads it and commits its own
+api/openapi.yaml for reproducible TypeScript generation, without assumptions
+about checkout locations. Direct user profile lookup exposes only safe public
+fields. Setup responses expose owner application UUID and historical chassis
+names; inactive selection and visibility/ownership restrictions remain enforced.
 
 The admin panel is part of the Go backend and is rendered by the backend itself.
 

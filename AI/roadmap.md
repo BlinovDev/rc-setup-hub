@@ -295,21 +295,22 @@ Checkpoint:
 
 ---
 
-## Phase 11 — client application
+## Phase 11 — frontend readiness
 
-Goal: build the actual end-user UX against the stable API.
+Goal: prepare the backend for a separately developed frontend application.
 
-Recommended POC direction: React web app/PWA. Final client choice can be made before this phase without changing backend domain design.
+Recommended direction: expose a stable documented API contract that the React client can consume without reading backend source code.
 
-Minimum screens:
-- login;
-- own profile;
-- own setups;
-- create/edit setup;
-- public search;
-- setup detail/share URL;
-- friend search/requests/list;
-- another user's visible setups.
+Minimum scope:
+- OpenAPI documentation for frontend-consumed endpoints;
+- documented authentication/session behavior;
+- documented setup schema v1 and nullable/optional fields;
+- documented friendship and public search flows;
+- trusted frontend application URL configuration;
+- redirect successful Google login back to the frontend;
+- credentialed CORS/session-cookie compatibility for the frontend.
+
+Do not implement frontend code in the backend repository.
 
 Do not start this phase until core backend flows have integration coverage.
 
