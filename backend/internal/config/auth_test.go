@@ -9,6 +9,7 @@ import (
 
 func authEnv(t *testing.T) {
 	t.Helper()
+	t.Setenv("ADMIN_EMAILS", "")
 	for key, value := range map[string]string{
 		"GOOGLE_CLIENT_ID": "test-client", "GOOGLE_CLIENT_SECRET": "test-secret",
 		"GOOGLE_REDIRECT_URL":   "http://localhost:8080/auth/google/callback",

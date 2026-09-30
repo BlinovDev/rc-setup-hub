@@ -1,4 +1,4 @@
-# Backend — Phase 3
+# Backend — Phase 4
 
 ## Local PostgreSQL
 
@@ -190,3 +190,64 @@ await fetch('/api/v1/auth/logout', {method: 'POST', credentials: 'include'});
 All profile/error responses are JSON with Cache-Control: no-store. The normal
 suite tests the Google flow with a fake provider, OIDC verification with locally
 signed tokens/local JWKS, and user persistence against disposable PostgreSQL.
+
+
+## Phase 4 admin shell
+
+Admin authorization is an environment-only allowlist. To allow your signed-in
+Google account, set its email exactly as shown by `GET /api/v1/me`:
+
+```sh
+export ADMIN_EMAILS='your-google-email@gmail.com'
+go run ./cmd/server
+```
+
+Replace the example address with your current account's email and keep the
+existing Google/session/database variables from the instructions above. Restart
+the backend after changing the allowlist; then sign in again and open
+`http://localhost:8080/admin`. Multiple accounts can be configured as:
+
+```sh
+export ADMIN_EMAILS='first@example.com, second@example.com'
+```
+
+Parsing trims surrounding whitespace, lowercases addresses, and ignores empty
+items. Matching is case-insensitive. Empty/unset configuration grants nobody
+admin access. A malformed address (including display-name syntax) fails server
+configuration rather than allowing a partial list. No admin flag, role, table,
+or migration is involved.
+
+Admin request flow is the existing session/user authentication middleware,
+email allowlist authorization middleware, admin-only CSRF middleware, then the
+HTML handler. Unauthenticated requests receive HTTP 401, consistent with the
+existing authentication behavior; sign in through `/auth/google`. Authenticated
+non-admin users receive 403; allowlisted users receive 200. The page displays the
+application title, nickname/email and placeholder Dashboard, Users and Chassis
+catalog navigation. No statistics, users listing, catalog routes or mutations
+are implemented in this phase.
+
+The embedded `templates/admin/index.html` is rendered with `html/template`
+autoescaping. Output is buffered before writing, so an execution failure returns
+a generic HTTP 500 without partial HTML or template details. Admin pages are
+marked Cache-Control: no-store.
+
+[Gorilla CSRF](https://github.com/gorilla/csrf) protects the entire admin route
+group. It uses the configured SESSION_SECRET and a separate signed HttpOnly
+`rc_admin_csrf` cookie scoped to `/admin`, with SameSite=Lax and the existing
+Secure setting. GET does not require a mutation token. Future POST/PUT/PATCH/DELETE
+handlers registered in the group automatically require a valid token and pass
+same-origin validation. Local HTTP is explicitly identified to the library;
+HTTPS retains its strict Origin/Referer checks. No cross-origin admin trust is
+added, and the JSON API has no new browser-form CSRF requirements.
+
+Future server-rendered forms can place `{{.CSRFField}}` inside their form element.
+The reusable `admin.PageData.CSRFField` must be populated with
+`csrf.TemplateField(r)` from a request that passed through admin CSRF middleware.
+This library-generated hidden input is the only trusted HTML field; user profile
+strings continue to be escaped normally. The middleware also accepts the standard
+X-CSRF-Token header. Tests cover valid form/header tokens, all mutation methods,
+missing/invalid tokens, missing cookies, untrusted origins, and HTTP/HTTPS settings.
+
+Admin access tests use the existing real PostgreSQL harness, actual application
+sessions, and a fake Google provider. Normal tests require no Google account.
+Run both `go test ./...` and `go test -race ./...` with Docker available.

@@ -18,6 +18,7 @@ type Auth struct {
 	CookieSecure                                          bool
 	SameSite                                              http.SameSite
 	AllowedOrigins                                        []string
+	AdminEmails                                           []string
 }
 
 // LoadAuth is separate so database migration commands do not require OAuth credentials.
@@ -69,6 +70,10 @@ func LoadAuth() (Auth, error) {
 			return c, errors.New("ALLOWED_ORIGINS must contain exact HTTP(S) origins")
 		}
 		c.AllowedOrigins = append(c.AllowedOrigins, origin)
+	}
+	c.AdminEmails, err = ParseAdminEmails(os.Getenv("ADMIN_EMAILS"))
+	if err != nil {
+		return c, err
 	}
 	return c, nil
 }

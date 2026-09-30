@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/admin"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/auth"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/config"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/database"
@@ -48,7 +49,14 @@ func main() {
 	defer pool.Close()
 	router := web.NewRouter(logger, pool.Ping)
 	userService := users.NewService(users.NewRepository(pool))
-	auth.NewHandler(authConfig, auth.NewGoogle(authConfig), userService).Register(router)
+	authHandler := auth.NewHandler(authConfig, auth.NewGoogle(authConfig), userService)
+	authHandler.Register(router)
+	adminHandler, err := admin.New(authConfig)
+	if err != nil {
+		logger.Error("admin initialization failed")
+		os.Exit(1)
+	}
+	adminHandler.Register(router, authHandler.RequireUser)
 	server := &http.Server{
 		Addr: cfg.HTTPAddr, Handler: router,
 		ReadHeaderTimeout: 5 * time.Second,

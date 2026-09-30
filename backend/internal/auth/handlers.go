@@ -40,7 +40,7 @@ func (h *Handler) Register(r chi.Router) {
 			r.Use(cors.Handler(cors.Options{AllowedOrigins: h.origins,
 				AllowedMethods: []string{"GET", "PATCH", "POST", "OPTIONS"}, AllowedHeaders: []string{"Content-Type"}, AllowCredentials: true}))
 		}
-		r.Use(h.requireUser)
+		r.Use(h.RequireUser)
 		r.Use(h.checkOrigin)
 		r.Post("/auth/logout", func(w http.ResponseWriter, r *http.Request) {
 			h.sessions.Logout(w, r)
@@ -116,7 +116,15 @@ func (h *Handler) callback(w http.ResponseWriter, r *http.Request) {
 type userContextKey struct{}
 
 func currentUser(r *http.Request) users.User { return r.Context().Value(userContextKey{}).(users.User) }
-func (h *Handler) requireUser(next http.Handler) http.Handler {
+
+// CurrentUser returns the application user resolved by RequireUser.
+func CurrentUser(r *http.Request) (users.User, bool) {
+	user, ok := r.Context().Value(userContextKey{}).(users.User)
+	return user, ok
+}
+
+// RequireUser resolves an existing session and returns 401 when authentication is absent.
+func (h *Handler) RequireUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id, err := h.sessions.UserID(r)
 		if err != nil {
