@@ -24,7 +24,7 @@ func TestAdminCSRF(t *testing.T) {
 			c := settings()
 			c.CookieSecure = secure
 			c.GoogleRedirectURL = origin + "/auth/google/callback"
-			h, err := New(c)
+			h, err := New(c, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

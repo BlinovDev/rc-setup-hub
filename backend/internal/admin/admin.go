@@ -20,6 +20,7 @@ type Handler struct {
 	template  *template.Template
 	protect   func(http.Handler) http.Handler
 	plaintext bool
+	repo      *Repository
 }
 
 // PageData makes the library-generated hidden CSRF field available to future forms.
@@ -27,9 +28,11 @@ type Handler struct {
 type PageData struct {
 	User      users.User
 	CSRFField template.HTML
+	Stats     Stats
+	Users     []UserRow
 }
 
-func New(c config.Auth) (*Handler, error) {
+func New(c config.Auth, repo *Repository) (*Handler, error) {
 	tmpl, err := template.ParseFS(admintemplates.Files, "*.html")
 	if err != nil {
 		return nil, err
@@ -38,7 +41,7 @@ func New(c config.Auth) (*Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Handler{emails: append([]string(nil), c.AdminEmails...), template: tmpl, plaintext: redirect.Scheme == "http",
+	return &Handler{repo: repo, emails: append([]string(nil), c.AdminEmails...), template: tmpl, plaintext: redirect.Scheme == "http",
 		protect: csrf.Protect(c.SessionSecret, csrf.CookieName("rc_admin_csrf"), csrf.Path("/admin"),
 			csrf.Secure(c.CookieSecure), csrf.HttpOnly(true), csrf.SameSite(csrf.SameSiteLaxMode),
 			csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "Forbidden", http.StatusForbidden) })))}, nil
@@ -49,6 +52,7 @@ func (h *Handler) Register(r chi.Router, authenticate func(http.Handler) http.Ha
 		r.Use(h.RequireAdmin)
 		r.Use(h.CSRF)
 		r.Get("/", h.Page)
+		r.Get("/users", h.Users)
 		for _, register := range adminRoutes {
 			register(r)
 		}
@@ -94,13 +98,36 @@ func (h *Handler) Page(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
+	stats, err := h.repo.Stats(r.Context())
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	h.render(w, "index.html", PageData{User: user, Stats: stats, CSRFField: csrf.TemplateField(r)})
+}
+
+func (h *Handler) Users(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.CurrentUser(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	rows, err := h.repo.Users(r.Context())
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	h.render(w, "users.html", PageData{User: user, Users: rows, CSRFField: csrf.TemplateField(r)})
+}
+
+func (h *Handler) render(w http.ResponseWriter, name string, data PageData) {
+	w.Header().Set("Cache-Control", "no-store")
 	var body bytes.Buffer
 	// Buffer first so template failures cannot send partial HTML with status 200.
-	if err := h.template.ExecuteTemplate(&body, "index.html", PageData{User: user, CSRFField: csrf.TemplateField(r)}); err != nil {
+	if err := h.template.ExecuteTemplate(&body, name, data); err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(body.Bytes())
 }

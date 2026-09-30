@@ -1,4 +1,4 @@
-# Backend — Phase 9
+# Backend — Phase 10
 
 ## Local PostgreSQL
 
@@ -761,3 +761,61 @@ friendship, literal matching/privacy, brand/model combinations, historical
 activation, equal-timestamp UUID ordering, microsecond cursor round trips,
 multiple pages without missing/duplicate rows, filters across pages, newer
 inserts, input errors, response shape and focused existing endpoint regressions.
+
+## Phase 10 admin dashboard and users
+
+The existing server-rendered admin panel now has database-backed operational
+read pages. No new migrations, dependencies, environment variables, frontend,
+OpenAPI or user/admin mutation endpoints were added.
+
+- `GET /admin`: dashboard showing Total users, Total setups and Public setups.
+- `GET /admin/users`: table of nickname, email, account creation timestamp (UTC),
+  and setup count. Users are ordered by created_at DESC, id DESC, including
+  zero-setup users. There is no pagination in this POC.
+
+`internal/admin/repository.go` owns read-only Stats and UserRow projections and
+explicit pgx SQL. Dashboard statistics use one statement: a scalar count of users
+plus count(*) and count(*) FILTER (WHERE visibility='public') over setups.
+The users table uses one LEFT JOIN/aggregate, counting s.id grouped by user ID;
+no per-user count queries are performed. Every visibility and schema version
+counts toward total/owned setups. Friendship and chassis activation do not
+change counts, and no technical JSON is loaded or decoded.
+
+`admin.New(authConfig, admin.NewRepository(pool))` receives the existing
+application pool through server wiring. The GET handlers fetch the read model
+and render the embedded index/users templates through a shared buffered render
+method. HTML autoescaping remains enabled. Database/template execution errors
+return only generic Internal Server Error (500), without partial page output.
+Admin responses retain Cache-Control: no-store.
+
+Both pages retain authentication -> ADMIN_EMAILS allowlist -> admin CSRF
+middleware. Unauthenticated callers receive the existing 401; authenticated
+non-admins receive 403. No database roles are used. Emails intentionally appear
+on the authorized Users page, but Google subjects, OAuth tokens and session
+secrets/details are neither queried nor rendered. Existing chassis pages/form
+mutations and CSRF behavior are unchanged. Users is now a navigation link.
+
+Manual browser verification:
+
+1. Start the backend with your existing Google/session/database settings and
+   ADMIN_EMAILS containing your account's Google email. Sign in through
+   `http://localhost:8080/auth/google`.
+2. Open `http://localhost:8080/admin`. Confirm the three counters, your signed-in
+   profile, and links to Users, Brands and Models. Total setups includes public,
+   friends and private; Public setups counts only public.
+3. Open `http://localhost:8080/admin/users`. Confirm nicknames, emails, UTC account
+   timestamps and setup counts. An account with no setups shows 0. Newest
+   accounts appear first. A user's count includes every visibility.
+4. Open `http://localhost:8080/admin/chassis/brands` and
+   `http://localhost:8080/admin/chassis/models`. Confirm existing catalog entries
+   and create/rename/enable/disable forms still work as previously documented.
+5. In an unsigned browser, both dashboard/users return 401. Sign in with a
+   non-allowlisted account to verify both return 403. Browser Network responses
+   for successful admin pages should include Cache-Control: no-store.
+
+Automated tests use real disposable migrated PostgreSQL and fake Google
+identities/application sessions. They verify empty/populated aggregates, all
+visibility counts, zero-setup accounts, tied-timestamp UUID ordering, HTML values,
+escaping/privacy, 401/403/200 authorization, buffered template failures, direct
+admin repository failures while authentication remains healthy, and chassis
+page regression. Existing catalog mutation and admin CSRF suites remain in place.

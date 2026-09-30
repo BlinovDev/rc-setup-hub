@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Users — RC Setup Hub Admin</title></head>
+<body>
+{{template "header" .}}
+<main>
+<h2>Users</h2>
+<table>
+<thead><tr><th>Nickname</th><th>Email</th><th>Created at (UTC)</th><th>Setup count</th></tr></thead>
+<tbody>
+{{range .Users}}
+<tr>
+<td>{{.Nickname}}</td>
+<td>{{.Email}}</td>
+<td><time datetime="{{.CreatedAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.CreatedAt.Format "2006-01-02T15:04:05Z07:00"}}</time></td>
+<td>{{.SetupCount}}</td>
+</tr>
+{{else}}<tr><td colspan="4">No users yet.</td></tr>{{end}}
+</tbody>
+</table>
+</main>
+</body>
+</html>

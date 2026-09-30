@@ -95,15 +95,22 @@ func TestAdminAccess(t *testing.T) {
 			router := web.NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)), pool.Ping)
 			authentication := auth.NewHandler(c, fakeGoogle{identity}, service)
 			authentication.Register(router)
-			h, err := New(c)
+			h, err := New(c, NewRepository(pool))
 			if err != nil {
 				t.Fatal(err)
 			}
 			h.Register(router, authentication.RequireUser)
-			if w := call(router, "/admin", nil); w.Code != 401 {
-				t.Fatal("unauthenticated admin", w.Code)
+			for _, path := range []string{"/admin", "/admin/users"} {
+				if w := call(router, path, nil); w.Code != 401 {
+					t.Fatal("unauthenticated admin", path, w.Code)
+				}
 			}
 			cookie := login(t, router)
+			for _, path := range []string{"/admin", "/admin/users"} {
+				if w := call(router, path, cookie); w.Code != tc.status {
+					t.Fatalf("%s status %d want %d", path, w.Code, tc.status)
+				}
+			}
 			w := call(router, "/admin", cookie)
 			if w.Code != tc.status {
 				t.Fatalf("admin status %d want %d: %s", w.Code, tc.status, w.Body)
@@ -120,8 +127,8 @@ func TestAdminAccess(t *testing.T) {
 				if w.Header().Get("Cache-Control") != "no-store" {
 					t.Fatal("admin page can be cached")
 				}
-				if w := call(router, "/admin/users", cookie); w.Code != 404 {
-					t.Fatal("later phase route implemented", w.Code)
+				if w := call(router, "/admin/users", cookie); w.Code != 200 {
+					t.Fatal("users route unavailable", w.Code)
 				}
 				// An execution error after some output must yield only a generic 500.
 				h.template = template.Must(template.New("index.html").Parse(`private template prefix {{.MissingField}}`))

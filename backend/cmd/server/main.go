@@ -66,7 +66,7 @@ func main() {
 	setupService := setups.NewService(setups.NewRepository(pool), catalog, friendshipRepository)
 	setupHandler := setups.NewHandler(setupService)
 	authHandler.Register(router, catalogHandler.RegisterAPI, setupHandler.RegisterAPI, friendshipHandler.RegisterAPI, func(r chi.Router) { userHandler.RegisterAPI(r, auth.CurrentUser) })
-	adminHandler, err := admin.New(authConfig)
+	adminHandler, err := admin.New(authConfig, admin.NewRepository(pool))
 	if err != nil {
 		logger.Error("admin initialization failed")
 		os.Exit(1)

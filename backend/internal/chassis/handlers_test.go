@@ -98,7 +98,7 @@ func TestCatalogHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	authentication.Register(router, handler.RegisterAPI)
-	adminHandler, err := admin.New(cfg)
+	adminHandler, err := admin.New(cfg, admin.NewRepository(pool))
 	if err != nil {
 		t.Fatal(err)
 	}
