@@ -10,8 +10,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/auth"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/config"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/database"
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/web"
 )
 
@@ -29,6 +31,11 @@ func main() {
 		logger.Error("configuration failed", "error", err)
 		os.Exit(1)
 	}
+	authConfig, err := config.LoadAuth()
+	if err != nil {
+		logger.Error("authentication configuration failed", "error", err)
+		os.Exit(1)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	connectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -39,8 +46,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+	router := web.NewRouter(logger, pool.Ping)
+	userService := users.NewService(users.NewRepository(pool))
+	auth.NewHandler(authConfig, auth.NewGoogle(authConfig), userService).Register(router)
 	server := &http.Server{
-		Addr: cfg.HTTPAddr, Handler: web.NewRouter(logger, pool.Ping),
+		Addr: cfg.HTTPAddr, Handler: router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	serveErr := make(chan error, 1)
