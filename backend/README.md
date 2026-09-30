@@ -1,4 +1,4 @@
-# Backend — Phase 7
+# Backend — Phase 8
 
 ## Local PostgreSQL
 
@@ -460,8 +460,8 @@ malformed user IDs return 400. No pagination was added.
 
 `internal/friendships/repository.go` implements only an accepted-pair lookup.
 It queries the unordered UUID pair with LEAST/GREATEST and status='accepted',
-matching the existing unique expression index. No friendship management routes
-exist yet. Relationships are checked afresh on requests; no cache delays
+matching the existing unique expression index. Phase 8 below adds management
+routes around this lookup. Relationships are checked afresh on requests; no cache delays
 acceptance or removal. Listing uses at most one friendship lookup and one setup
 query regardless of list size. `/me/setups` needs no friendship lookup.
 
@@ -527,3 +527,112 @@ Tests use real migrated PostgreSQL containers and application sessions with fake
 Google identities. They cover the complete visibility matrix, both request
 orientations, pending/accepted/removed states, filtered newest-first listings,
 identical missing/private errors, authentication and owner-only write regressions.
+
+## Phase 8 friendship management and discovery
+
+All endpoints use the existing authenticated API group and exact-origin CORS:
+
+```text
+GET    /api/v1/users/search?q=<nickname>   -> 200, public profile array
+GET    /api/v1/friendships                 -> 200, incoming/outgoing/accepted
+POST   /api/v1/friendships                 -> 201, relationship
+POST   /api/v1/friendships/{id}/accept     -> 200, accepted relationship
+DELETE /api/v1/friendships/{id}            -> 204
+```
+
+Nickname search lives in `internal/users/search.go`: service trimming/validation
+and explicit repository SQL. It matches literal case-insensitive substrings via
+strpos(lower(nickname),lower(query)); percent and underscore have no wildcard
+meaning. Empty/whitespace queries return `[]`, the caller is excluded, and at
+most 20 results are ordered by lower(nickname), id. Search is only by nickname,
+never email. Profiles contain only id, nickname and nullable avatar_url. Queries
+are limited to 64 Unicode characters (the maximum nickname length); invalid
+UTF-8 or null bytes are rejected with 400. `internal/users/handlers.go` receives
+the existing authenticated-user accessor from application wiring to avoid an
+import cycle between users and auth.
+
+`internal/friendships` separates domain types/errors, explicit pgx SQL, service
+validation/state transitions, and HTTP decoding/error mapping. Creation accepts
+only `{"user_id":"uuid"}`; requester comes from the session. The JSON body is
+limited to 4 KiB and rejects unknown fields, malformed/trailing JSON and null
+bodies. UUIDs are validated/canonicalized, self requests return 400, and a missing
+target maps the addressee foreign-key violation to 404. The INSERT always creates
+pending. No pre-check is needed: the existing unordered-pair unique index is the
+final concurrency guard, and its unique violations map to a domain conflict/409
+for same-direction, reverse-direction or accepted pairs.
+
+Accept uses a single atomic UPDATE constrained by ID, addressee ID and pending
+status; it sets accepted and updated_at=now(). If no row is updated, a
+participant-scoped lookup distinguishes an addressee's already-accepted 409
+from missing/unrelated/requester 404. DELETE is participant-scoped and physically
+removes the row: requester cancellation, addressee rejection, and either
+participant's removal all use the same endpoint. A deleted pair can request again.
+
+Create/accept responses include id, requester_id, addressee_id, status,
+created_at and updated_at. The list returns three arrays, including empty `[]`:
+
+```json
+{"incoming":[],"outgoing":[],"accepted":[]}
+```
+
+Each list item has id, user{id,nickname,avatar_url}, created_at and updated_at.
+One SQL JOIN with CASE selects the OTHER participant, avoiding N+1 profile
+lookups. Items are ordered by updated_at DESC, id DESC before grouping. Email,
+Google subject and session details are never included. Errors remain generic
+for unexpected failures; handlers do not inspect PostgreSQL errors.
+
+AreAccepted is preserved without caching. Successful acceptance immediately
+grants friends-only setup access; deletion immediately removes it on the next
+request. Pending requests do not grant access. The hardened metadata-first
+setup detail read and all owner-scoped setup writes remain unchanged.
+No migrations, dependencies, environment settings or CORS changes were needed.
+Public setup search remains a later phase.
+
+To test with two real browser sessions:
+
+1. Sign in as A normally and B in an incognito/separate browser. Open
+   `http://localhost:8080/api/v1/me` in each. Define the Phase 6 `call` console
+   helper in both sessions. Record B's nickname.
+2. In A's console, find B, create a friends-only setup, and send the request:
+
+   ```javascript
+   const candidates = await call('/users/search?q=' + encodeURIComponent('B_NICKNAME'));
+   const b = candidates.find(u => u.nickname === 'B_NICKNAME');
+   if (!b) throw new Error('Use B\'s exact application nickname');
+   const setup = await call('/setups', 'POST', {
+     title: 'Friends-only test', visibility: 'friends',
+     chassis_model_id: null, data: {}
+   });
+   const friendship = await call('/friendships', 'POST', {user_id: b.id});
+   console.log({setupID: setup.id, friendshipID: friendship.id});
+   console.log(await call('/friendships')); // request is outgoing
+   ```
+
+3. Copy the setup and friendship UUIDs into B's console. Before accepting,
+   `await call('/setups/SETUP_UUID')` fails with 404; the pending request has not
+   granted access. Check B's incoming request, then accept and read the setup:
+
+   ```javascript
+   console.log(await call('/friendships')); // request is incoming
+   console.log(await call('/friendships/FRIENDSHIP_UUID/accept', 'POST'));
+   console.log(await call('/setups/SETUP_UUID')); // now succeeds
+   console.log(await call('/friendships')); // relationship is accepted
+   ```
+
+4. A's `/friendships` list also shows accepted. From B, a PATCH or DELETE of A's
+   setup still fails with 404. Remove the relationship and verify access vanishes:
+
+   ```javascript
+   await call('/friendships/FRIENDSHIP_UUID', 'DELETE'); // 204
+   await call('/setups/SETUP_UUID'); // fails with 404 again
+   ```
+
+5. To try cancellation/rejection, send a new request between the same pair.
+   DELETE its friendship ID from A cancels; DELETE from B rejects. No extra
+   rejected/cancelled/removed status is stored.
+
+The automated suite uses real disposable PostgreSQL and fake Google identities.
+It covers discovery privacy/limits/order, strict requests, duplicate/reverse and
+concurrent inserts, accept/delete authorization, all list groups and profile
+orientation, plus real HTTP transitions driving setup visibility and preserving
+private-data concealment and owner-only mutations.

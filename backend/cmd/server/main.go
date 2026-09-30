@@ -19,6 +19,7 @@ import (
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/setups"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/web"
+	"github.com/go-chi/chi/v5"
 )
 
 func main() {
@@ -59,9 +60,12 @@ func main() {
 		logger.Error("catalog initialization failed")
 		os.Exit(1)
 	}
-	setupService := setups.NewService(setups.NewRepository(pool), catalog, friendships.NewRepository(pool))
+	friendshipRepository := friendships.NewRepository(pool)
+	friendshipHandler := friendships.NewHandler(friendships.NewService(friendshipRepository))
+	userHandler := users.NewHandler(userService)
+	setupService := setups.NewService(setups.NewRepository(pool), catalog, friendshipRepository)
 	setupHandler := setups.NewHandler(setupService)
-	authHandler.Register(router, catalogHandler.RegisterAPI, setupHandler.RegisterAPI)
+	authHandler.Register(router, catalogHandler.RegisterAPI, setupHandler.RegisterAPI, friendshipHandler.RegisterAPI, func(r chi.Router) { userHandler.RegisterAPI(r, auth.CurrentUser) })
 	adminHandler, err := admin.New(authConfig)
 	if err != nil {
 		logger.Error("admin initialization failed")
