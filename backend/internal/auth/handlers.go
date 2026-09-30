@@ -31,14 +31,14 @@ func NewHandler(c config.Auth, provider Provider, service *users.Service) *Handl
 	return &Handler{provider: provider, users: service, sessions: NewSessions(c), origins: c.AllowedOrigins,
 		backendOrigin: redirect.Scheme + "://" + redirect.Host}
 }
-func (h *Handler) Register(r chi.Router) {
+func (h *Handler) Register(r chi.Router, apiRoutes ...func(chi.Router)) {
 	r.Get("/auth/google", h.login)
 	r.Get("/auth/google/callback", h.callback)
 	r.Route("/api/v1", func(r chi.Router) {
 		// Empty allowlists must not use chi/cors' default wildcard behavior.
 		if len(h.origins) > 0 {
 			r.Use(cors.Handler(cors.Options{AllowedOrigins: h.origins,
-				AllowedMethods: []string{"GET", "PATCH", "POST", "OPTIONS"}, AllowedHeaders: []string{"Content-Type"}, AllowCredentials: true}))
+				AllowedMethods: []string{"GET", "PATCH", "POST", "DELETE", "OPTIONS"}, AllowedHeaders: []string{"Content-Type"}, AllowCredentials: true}))
 		}
 		r.Use(h.RequireUser)
 		r.Use(h.checkOrigin)
@@ -48,6 +48,9 @@ func (h *Handler) Register(r chi.Router) {
 		})
 		r.Get("/me", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, currentUser(r)) })
 		r.Patch("/me", h.updateNickname)
+		for _, register := range apiRoutes {
+			register(r)
+		}
 	})
 }
 func equal(a, b string) bool { return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1 }

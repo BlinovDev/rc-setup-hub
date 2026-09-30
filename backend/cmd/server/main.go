@@ -12,8 +12,10 @@ import (
 
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/admin"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/auth"
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/chassis"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/config"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/database"
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/setups"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/web"
 )
@@ -50,13 +52,21 @@ func main() {
 	router := web.NewRouter(logger, pool.Ping)
 	userService := users.NewService(users.NewRepository(pool))
 	authHandler := auth.NewHandler(authConfig, auth.NewGoogle(authConfig), userService)
-	authHandler.Register(router)
+	catalog := chassis.NewService(chassis.NewRepository(pool))
+	catalogHandler, err := chassis.NewHandler(catalog)
+	if err != nil {
+		logger.Error("catalog initialization failed")
+		os.Exit(1)
+	}
+	setupService := setups.NewService(setups.NewRepository(pool), catalog)
+	setupHandler := setups.NewHandler(setupService)
+	authHandler.Register(router, catalogHandler.RegisterAPI, setupHandler.RegisterAPI)
 	adminHandler, err := admin.New(authConfig)
 	if err != nil {
 		logger.Error("admin initialization failed")
 		os.Exit(1)
 	}
-	adminHandler.Register(router, authHandler.RequireUser)
+	adminHandler.Register(router, authHandler.RequireUser, catalogHandler.RegisterAdmin)
 	server := &http.Server{
 		Addr: cfg.HTTPAddr, Handler: router,
 		ReadHeaderTimeout: 5 * time.Second,

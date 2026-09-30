@@ -30,7 +30,7 @@ type PageData struct {
 }
 
 func New(c config.Auth) (*Handler, error) {
-	tmpl, err := template.ParseFS(admintemplates.Files, "index.html")
+	tmpl, err := template.ParseFS(admintemplates.Files, "*.html")
 	if err != nil {
 		return nil, err
 	}
@@ -43,12 +43,15 @@ func New(c config.Auth) (*Handler, error) {
 			csrf.Secure(c.CookieSecure), csrf.HttpOnly(true), csrf.SameSite(csrf.SameSiteLaxMode),
 			csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "Forbidden", http.StatusForbidden) })))}, nil
 }
-func (h *Handler) Register(r chi.Router, authenticate func(http.Handler) http.Handler) {
+func (h *Handler) Register(r chi.Router, authenticate func(http.Handler) http.Handler, adminRoutes ...func(chi.Router)) {
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(authenticate)
 		r.Use(h.RequireAdmin)
 		r.Use(h.CSRF)
 		r.Get("/", h.Page)
+		for _, register := range adminRoutes {
+			register(r)
+		}
 	})
 }
 
@@ -75,6 +78,9 @@ func (h *Handler) RequireAdmin(next http.Handler) http.Handler {
 func (h *Handler) CSRF(next http.Handler) http.Handler {
 	protected := h.protect(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch || r.Method == http.MethodDelete {
+			r.Body = http.MaxBytesReader(w, r.Body, 8192)
+		}
 		if h.plaintext {
 			r = csrf.PlaintextHTTPRequest(r)
 		}

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Brands — RC Setup Hub Admin</title></head>
+<body>
+{{template "header" .}}
+<main>
+<h2>Brands</h2>
+{{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+<form action="/admin/chassis/brands" method="post">
+  {{.CSRFField}}
+  <label>Brand name <input name="name" value="{{.InputName}}" maxlength="100" required></label>
+  <button type="submit">Create brand</button>
+</form>
+<table>
+<thead><tr><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
+<tbody>
+{{range .Brands}}
+<tr>
+<td>{{.Name}}</td><td>{{if .IsActive}}Active{{else}}Inactive{{end}}</td>
+<td>
+  <form action="/admin/chassis/brands/{{.ID}}/update" method="post">
+    {{$.CSRFField}}<label>New name <input name="name" value="{{.Name}}" maxlength="100" required></label><button type="submit">Rename brand</button>
+  </form>
+  {{if .IsActive}}
+  <form action="/admin/chassis/brands/{{.ID}}/disable" method="post">{{$.CSRFField}}<button type="submit">Disable brand</button></form>
+  {{else}}
+  <form action="/admin/chassis/brands/{{.ID}}/enable" method="post">{{$.CSRFField}}<button type="submit">Enable brand</button></form>
+  {{end}}
+</td>
+</tr>
+{{else}}<tr><td colspan="3">No brands yet.</td></tr>{{end}}
+</tbody>
+</table>
+</main>
+</body>
+</html>

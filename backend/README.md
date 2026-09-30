@@ -1,4 +1,4 @@
-# Backend — Phase 4
+# Backend — Phase 6
 
 ## Local PostgreSQL
 
@@ -221,10 +221,9 @@ Admin request flow is the existing session/user authentication middleware,
 email allowlist authorization middleware, admin-only CSRF middleware, then the
 HTML handler. Unauthenticated requests receive HTTP 401, consistent with the
 existing authentication behavior; sign in through `/auth/google`. Authenticated
-non-admin users receive 403; allowlisted users receive 200. The page displays the
-application title, nickname/email and placeholder Dashboard, Users and Chassis
-catalog navigation. No statistics, users listing, catalog routes or mutations
-are implemented in this phase.
+non-admin users receive 403; allowlisted users receive 200. The shell displays the application title and nickname/email. Phase 5 adds
+Brands and Models navigation and forms; Users remains a placeholder. Statistics
+and a users listing are not implemented.
 
 The embedded `templates/admin/index.html` is rendered with `html/template`
 autoescaping. Output is buffered before writing, so an execution failure returns
@@ -251,3 +250,189 @@ missing/invalid tokens, missing cookies, untrusted origins, and HTTP/HTTPS setti
 Admin access tests use the existing real PostgreSQL harness, actual application
 sessions, and a fake Google provider. Normal tests require no Google account.
 Run both `go test ./...` and `go test -race ./...` with Docker available.
+
+
+## Phase 5 chassis catalog
+
+The backend uses the existing chassis_brands/chassis_models tables; no migration
+or catalog seed records were added. Domain types, explicit pgx SQL, validation,
+and HTTP handlers live in `internal/chassis/{types,repository,service,handlers}.go`.
+The application wiring registers catalog routes inside the existing authenticated
+API group and authenticated/admin/CSRF admin group.
+
+Admin pages:
+
+- `GET /admin/chassis/brands`: all brands, create, rename, enable/disable forms.
+- `POST /admin/chassis/brands`: create with form field `name`.
+- `POST /admin/chassis/brands/{id}/update`: rename with `name`.
+- `POST /admin/chassis/brands/{id}/disable` and `/enable`: change activation.
+- `GET /admin/chassis/models`: all models and their parent brand/status, with
+  create, rename, enable/disable forms.
+- `POST /admin/chassis/models`: create with `brand_id` and `name`.
+- `POST /admin/chassis/models/{id}/update`: rename with `name` only.
+- `POST /admin/chassis/models/{id}/disable` and `/enable`: change activation.
+
+All mutations use application/x-www-form-urlencoded forms, existing admin
+allowlist authorization, and the existing CSRF field/cookie mechanism. Bodies
+are limited to 8 KiB before CSRF parsing. Success returns a 303 redirect to the
+corresponding listing; validation failures render a useful message (400),
+duplicates return 409 with a human-readable message, and unknown UUID entries
+return 404. Malformed IDs return 400. Internal failures return generic 500.
+
+Names are trimmed and must contain 1–100 Unicode characters without controls.
+`Custom` (case-insensitive) is reserved for the synthetic client option and is
+rejected. PostgreSQL's existing case-insensitive unique indexes remain the final
+uniqueness authority, including concurrent writes. Model names are unique only
+within a brand. Index violations are translated to a domain duplicate error;
+PostgreSQL details are never rendered.
+
+A model's brand_id is immutable during editing for this POC; posting brand_id
+on its rename route is rejected. New models require an active parent brand.
+The repository locks the selected active parent with FOR SHARE and inserts in
+one SQL statement, preventing a concurrent disable from invalidating that check.
+No catalog row is deleted through these endpoints.
+
+Authenticated selection API:
+
+```text
+GET /api/v1/chassis/brands
+GET /api/v1/chassis/brands/{brand_id}/models
+```
+
+Responses are JSON arrays of only `{"id":"uuid","name":"Name"}` objects.
+Empty results are `[]`. Unauthenticated calls return 401. The model-list endpoint
+returns 404 for unknown or inactive brands; invalid UUIDs return 400. Unexpected
+errors return generic 500. Existing exact-origin credentialed CORS still applies.
+There are no client mutation endpoints.
+
+Client SQL queries filter active values. Models require both their own and their
+parent brand's activation flags to be true. Disabling a brand does not change its
+models' flags; re-enabling it restores visibility of its active models. Disabled
+records remain visible in admin lists and available through `Service.GetModel`
+and `Repository.GetModel`, which return ModelState with historical names and
+independent model/brand activation flags. Unknown model IDs return ErrNotFound.
+These lookups prepare setup validation without implementing setup CRUD.
+
+To create **Yokomo → RD2.0** manually:
+
+1. Set DATABASE_URL, Google/session configuration and ADMIN_EMAILS as documented
+   above, then start PostgreSQL, apply migrations and run the backend.
+2. Open `http://localhost:8080/auth/google` and sign in with an allowlisted account.
+3. Open `http://localhost:8080/admin`, then click **Brands**.
+4. Enter `Yokomo` in **Brand name** and click **Create brand**.
+5. Click **Models**, choose `Yokomo` in **Brand**, enter `RD2.0` in **Model name**,
+   and click **Create model**.
+6. Verify both entries show Active. In the same signed-in browser, open
+   `/api/v1/chassis/brands`, copy Yokomo's ID, and open
+   `/api/v1/chassis/brands/{that-id}/models` to see RD2.0.
+
+The client can later display “Custom / not listed” and submit a NULL chassis
+model reference; no Custom database record is needed. No setup, friendship,
+search, statistics or admin users-list functionality was added in Phase 5.
+
+Catalog tests use disposable PostgreSQL with automatically applied migrations,
+real sessions and a fake Google provider. Coverage includes case-insensitive
+uniqueness, rename, activation flags, immutable parent brands, stored historical
+records, authenticated JSON selection, CSRF and admin access. Run
+`go test ./...` and `go test -race ./...` with Docker running.
+
+## Phase 6 owner setups
+
+`internal/setups` contains explicit schema-v1 domain types, validation/service
+logic, a pgx repository, and JSON handlers. It uses the existing setups table;
+there are no new migrations, dependencies, or catalog records.
+
+All five routes require the existing application session:
+
+```text
+POST   /api/v1/setups          -> 201, setup and Location header
+GET    /api/v1/setups/{id}     -> 200, setup
+PATCH  /api/v1/setups/{id}     -> 200, updated setup
+DELETE /api/v1/setups/{id}     -> 204
+GET    /api/v1/me/setups       -> 200, array (newest created first)
+```
+
+Responses include id, chassis_model_id, title, visibility, data, notes,
+schema_version, created_at and updated_at. Owner ID is internal and never
+accepted from clients. Every repository read/update/delete constrains ownership;
+missing and other users' setups both return 404. This applies even to public
+setups: sharing is not implemented in Phase 6.
+
+DataV1 has optional Suspension, Shocks and Electronics sections. Suspension has
+optional Front/Rear AxleSuspension values with camber_deg, caster_deg, toe_deg
+and link_lengths (name/length_mm). Shocks has optional Front/Rear Shock values
+with manufacturer, model, Spring (manufacturer/color), and oil_cst. Electronics
+has motor, esc, servo, gyro and radio strings. Optional numeric values use
+*float64 with omitempty: an explicit zero survives JSON and JSONB round trips,
+while omitted/null numeric values remain absent. Link length is required and
+positive when a link is supplied; supplied oil must also be positive. Angles
+have no narrow domain limits.
+
+Create requires a nonempty trimmed title (maximum 150 Unicode characters), an
+explicit visibility (public/friends/private), and an object-valued data document.
+Notes are optional free-form text (maximum 10,000 characters). Technical strings
+are trimmed and limited to 200 characters; an axle may contain up to 100 links.
+Requests require application/json, have a 256 KiB body limit, and reject unknown
+fields, malformed JSON and multiple JSON values. Validation returns 400;
+unexpected failures return generic 500 without database details.
+
+The backend inserts schema_version=1 and never allows clients to set it.
+PATCH replaces only supplied top-level fields. Small explicit presence-bearing
+types distinguish omission from null: null clears chassis_model_id or notes;
+null title, visibility or data is invalid. Supplied data replaces the complete
+document. SQL explicitly sets updated_at=now(); an optimistic timestamp check
+returns 409 for a concurrent change, so clients can reload and retry without
+silently erasing another partial update. Schema/owner fields cannot be patched.
+
+Null chassis is allowed without a Custom row. New non-null selections reuse
+the chassis service and require an existing active model under an active brand.
+An unchanged historical chassis reference is retained and does not need to be
+active on PATCH. It remains readable after disabling the model or brand;
+changing to a different inactive chassis is rejected, and clearing is allowed.
+
+To test **Yokomo → RD2.0** manually, start the backend as documented above and
+ensure both catalog entries are active. Sign in at
+`http://localhost:8080/auth/google`, then open
+`http://localhost:8080/api/v1/me`. In that page's browser developer console,
+run the following statements in order. They use your existing HttpOnly session
+cookie without reading it or storing tokens:
+
+```javascript
+async function call(path, method = 'GET', body) {
+  const response = await fetch('/api/v1' + path, {
+    method, credentials: 'include',
+    headers: body === undefined ? {} : {'Content-Type': 'application/json'},
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.status === 204 ? undefined : response.json();
+}
+
+const brands = await call('/chassis/brands');
+const yokomo = brands.find(b => b.name === 'Yokomo');
+if (!yokomo) throw new Error('Create or enable Yokomo in the admin catalog');
+const models = await call(`/chassis/brands/${yokomo.id}/models`);
+const rd20 = models.find(m => m.name === 'RD2.0');
+if (!rd20) throw new Error('Create or enable RD2.0 in the admin catalog');
+
+// Create a private setup using the catalog model.
+const setup = await call('/setups', 'POST', {
+  title: 'RD2.0 carpet setup', chassis_model_id: rd20.id,
+  visibility: 'private', notes: 'Initial setup',
+  data: {suspension: {rear: {toe_deg: 0}}}
+});
+console.log(setup);
+
+// Read, patch only the title, list your setups, then delete.
+console.log(await call(`/setups/${setup.id}`));
+console.log(await call(`/setups/${setup.id}`, 'PATCH', {title: 'RD2.0 revised title'}));
+console.log(await call('/me/setups'));
+await call(`/setups/${setup.id}`, 'DELETE');
+// A subsequent GET of this ID returns 404.
+```
+
+Repository and HTTP tests use disposable real PostgreSQL databases with
+automatically applied migrations and fake Google identities. They cover typed
+JSONB persistence, numeric zero, schema ownership, strict input validation,
+partial updates, ownership, catalog activation/history, listing and deletion.
+Run `go test ./...` and `go test -race ./...` with Docker available.

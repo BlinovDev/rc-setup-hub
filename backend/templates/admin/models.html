@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Models — RC Setup Hub Admin</title></head>
+<body>
+{{template "header" .}}
+<main>
+<h2>Models</h2>
+{{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
+<form action="/admin/chassis/models" method="post">
+  {{.CSRFField}}
+  <label>Brand <select name="brand_id" required>
+    <option value="">Choose an active brand</option>
+    {{range .Brands}}{{if .IsActive}}<option value="{{.ID}}" {{if eq .ID $.BrandID}}selected{{end}}>{{.Name}}</option>{{end}}{{end}}
+  </select></label>
+  <label>Model name <input name="name" value="{{.InputName}}" maxlength="100" required></label>
+  <button type="submit">Create model</button>
+</form>
+<p>A model's brand is fixed after creation. Models under inactive brands are hidden from client selection.</p>
+<table>
+<thead><tr><th>Brand</th><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
+<tbody>
+{{range .Models}}
+<tr>
+<td>{{.BrandName}}{{if not .BrandActive}} (inactive brand){{end}}</td><td>{{.Name}}</td><td>{{if .IsActive}}Active{{else}}Inactive{{end}}</td>
+<td>
+  <form action="/admin/chassis/models/{{.ID}}/update" method="post">
+    {{$.CSRFField}}<label>New name <input name="name" value="{{.Name}}" maxlength="100" required></label><button type="submit">Rename model</button>
+  </form>
+  {{if .IsActive}}
+  <form action="/admin/chassis/models/{{.ID}}/disable" method="post">{{$.CSRFField}}<button type="submit">Disable model</button></form>
+  {{else}}
+  <form action="/admin/chassis/models/{{.ID}}/enable" method="post">{{$.CSRFField}}<button type="submit">Enable model</button></form>
+  {{end}}
+</td>
+</tr>
+{{else}}<tr><td colspan="4">No models yet.</td></tr>{{end}}
+</tbody>
+</table>
+</main>
+</body>
+</html>
