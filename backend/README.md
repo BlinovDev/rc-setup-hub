@@ -1,4 +1,4 @@
-# Backend — Phase 8
+# Backend — Phase 9
 
 ## Local PostgreSQL
 
@@ -586,7 +586,7 @@ grants friends-only setup access; deletion immediately removes it on the next
 request. Pending requests do not grant access. The hardened metadata-first
 setup detail read and all owner-scoped setup writes remain unchanged.
 No migrations, dependencies, environment settings or CORS changes were needed.
-Public setup search remains a later phase.
+Phase 9 below adds public setup search.
 
 To test with two real browser sessions:
 
@@ -636,3 +636,128 @@ It covers discovery privacy/limits/order, strict requests, duplicate/reverse and
 concurrent inserts, accept/delete authorization, all list groups and profile
 orientation, plus real HTTP transitions driving setup visibility and preserving
 private-data concealment and owner-only mutations.
+
+## Phase 9 authenticated public setup search
+
+```text
+GET /api/v1/setups/search?q=&brand_id=&model_id=&limit=&cursor=
+```
+
+Omit optional parameters rather than supplying empty UUID, limit or cursor
+values. Authentication is mandatory (401 otherwise). All callers, including
+owners and accepted friends, receive ONLY public setups. The route uses the
+existing authenticated router/CORS; no new configuration or migrations apply.
+
+The handler reads query parameters, the service normalizes/validates them and
+handles cursors, and the repository runs one explicit parameterized query.
+Implementation lives in `internal/setups/search{,_handler,_repository}.go`.
+The existing complete-detail endpoint, ownership protections, friendship APIs,
+/me/setups and per-user visibility-aware lists retain their existing contracts.
+
+Parameters:
+
+- q: trimmed, case-insensitive literal substring of setup title OR owner nickname.
+  Empty text means no filter. Maximum 100 Unicode characters; invalid UTF-8 and
+  null bytes are rejected. Percent and underscore are literal characters.
+  Email, notes, Google subject and technical JSONB are never searched.
+- brand_id: UUID matching the referenced model's parent brand; NULL-chassis
+  setups do not match. Valid unknown UUIDs return zero results.
+- model_id: UUID matching chassis_model_id exactly. Brand and model filters
+  combine with AND; an inconsistent pair simply returns zero results.
+- limit: integer 1–50, default 20. Empty, malformed or out-of-range values fail.
+- cursor: unpadded base64url of `RFC3339Nano-UTC-timestamp|canonical-UUID`.
+  It is an opaque ordering key, not a signed/encrypted security token. Decoding
+  validates canonical base64url, complete two-part structure, timestamp and UUID;
+  input is limited to 256 characters. Repeat filters/limit when requesting the
+  next page: they are not encoded in the cursor.
+
+Malformed query encoding, duplicate supported parameters, invalid filters,
+query text, limit or cursor return 400. Unexpected errors return generic 500.
+Unknown extra query parameter names are ignored. Empty results are exactly:
+
+```json
+{"items":[],"next_cursor":null}
+```
+
+Each SearchItem has id, title, visibility (always public), chassis_model_id,
+schema_version, created_at, updated_at, the safe owner public profile
+{id,nickname,avatar_url}, and chassis {model_id,model_name,brand_id,brand_name}.
+Custom/unlisted setups have chassis_model_id:null and chassis:null.
+Data and notes are deliberately omitted; fetch the detail endpoint for them.
+Only display metadata is read, so summaries can report a stored schema version
+without interpreting its technical data format.
+
+The query joins setups/users and LEFT JOINs models/brands, selecting all display
+information in one query without N+1 lookups. It always contains
+`WHERE s.visibility='public'`; friends/private rows never reach application
+scanning, even if their data is corrupt or their schema version unsupported.
+Technical data/notes are never selected or decoded. Historical catalog reads do
+not filter is_active: disabling a model or brand retains public search results,
+their historical names and brand/model filter matches.
+
+Ordering is `s.created_at DESC,s.id DESC`. Cursor pages add the tuple comparison
+`(s.created_at,s.id)<(cursor_created_at,cursor_id)`, equivalent to the timestamp
+less-than condition followed by UUID less-than on ties. The query binds every
+user value and fetches limit+1 summaries. An extra row means another page exists;
+next_cursor is generated from the LAST RETURNED row, not the extra row.
+Otherwise next_cursor is null. There is no offset or pagination COUNT query.
+Newer inserts do not shift subsequent pages; results are a live listing, so
+concurrent deletions/visibility changes can affect later pages.
+
+Manual examples: sign in at `http://localhost:8080/auth/google`, open
+`http://localhost:8080/api/v1/me` and use its browser developer console:
+
+```javascript
+async function api(path) {
+  const response = await fetch('/api/v1' + path, {credentials: 'include'});
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+
+// All public setups (first page), literal title/nickname text, and custom limit.
+console.log(await api('/setups/search'));
+console.log(await api('/setups/search?q=' + encodeURIComponent('carpet')));
+console.log(await api('/setups/search?q=' + encodeURIComponent('Anton')));
+console.log(await api('/setups/search?limit=2'));
+
+// Resolve active local Yokomo -> RD2.0 IDs for the filter examples.
+// Historical IDs can instead be copied from search results' chassis fields.
+const brands = await api('/chassis/brands');
+const yokomo = brands.find(b => b.name === 'Yokomo');
+if (!yokomo) throw new Error('Use an existing brand UUID from a search result');
+const models = await api(`/chassis/brands/${yokomo.id}/models`);
+const rd20 = models.find(m => m.name === 'RD2.0');
+if (!rd20) throw new Error('Use an existing model UUID from a search result');
+console.log(await api(`/setups/search?brand_id=${yokomo.id}`));
+console.log(await api(`/setups/search?model_id=${rd20.id}`));
+
+// Next page with every filter preserved. Seed at least two matching public
+// setups to get a next_cursor when limit=1.
+const filters = new URLSearchParams({
+  q: 'carpet', brand_id: yokomo.id, model_id: rd20.id, limit: '1'
+});
+const first = await api('/setups/search?' + filters.toString());
+console.log(first);
+if (first.next_cursor !== null) {
+  filters.set('cursor', first.next_cursor);
+  console.log(await api('/setups/search?' + filters.toString()));
+}
+```
+
+Equivalent browser URLs (replace UUID/cursor placeholders with actual values):
+
+```text
+http://localhost:8080/api/v1/setups/search
+http://localhost:8080/api/v1/setups/search?q=carpet
+http://localhost:8080/api/v1/setups/search?brand_id=BRAND_UUID
+http://localhost:8080/api/v1/setups/search?model_id=MODEL_UUID
+http://localhost:8080/api/v1/setups/search?limit=2
+http://localhost:8080/api/v1/setups/search?limit=2&cursor=NEXT_CURSOR
+```
+
+Tests use real disposable migrated PostgreSQL and application sessions with fake
+Google identities. They cover public-only visibility regardless of caller or
+friendship, literal matching/privacy, brand/model combinations, historical
+activation, equal-timestamp UUID ordering, microsecond cursor round trips,
+multiple pages without missing/duplicate rows, filters across pages, newer
+inserts, input errors, response shape and focused existing endpoint regressions.

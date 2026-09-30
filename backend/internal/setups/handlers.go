@@ -17,6 +17,7 @@ func NewHandler(service *Service) *Handler { return &Handler{service: service} }
 // RegisterAPI mounts authenticated setup routes; mutations remain owner-only.
 func (h *Handler) RegisterAPI(r chi.Router) {
 	r.Post("/setups", h.create)
+	r.Get("/setups/search", h.search)
 	r.Get("/setups/{id}", h.get)
 	r.Patch("/setups/{id}", h.patch)
 	r.Delete("/setups/{id}", h.delete)
