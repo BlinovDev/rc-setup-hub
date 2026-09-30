@@ -1,0 +1,16 @@
+.DS_Store
+
+.env
+.env.*
+!.env.example
+
+backend/.env
+
+.idea/
+.vscode/
+
+frontend/node_modules/
+frontend/dist/
+
+coverage.out
+*.test
