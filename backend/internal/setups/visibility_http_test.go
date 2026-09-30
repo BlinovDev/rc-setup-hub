@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -25,7 +26,7 @@ func TestVisibilityHTTP(t *testing.T) {
 	ctx := context.Background()
 	catalog := chassis.NewService(chassis.NewRepository(pool))
 	service := NewService(NewRepository(pool), catalog, friendships.NewRepository(pool))
-	cfg := config.Auth{GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SessionSecret: bytes.Repeat([]byte("s"), 32), SameSite: http.SameSiteLaxMode}
+	cfg := config.Auth{AppURL: &url.URL{Scheme: "http", Host: "localhost:5173"}, GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SessionSecret: bytes.Repeat([]byte("s"), 32), SameSite: http.SameSiteLaxMode}
 	provider := &fakeGoogle{}
 	authentication := auth.NewHandler(cfg, provider, users.NewService(users.NewRepository(pool)))
 	router := web.NewRouter(slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)), pool.Ping)

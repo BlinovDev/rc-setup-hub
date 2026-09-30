@@ -1,4 +1,4 @@
-# Backend — Phase 10
+# Backend — Phase 11
 
 ## Local PostgreSQL
 
@@ -110,6 +110,7 @@ export GOOGLE_REDIRECT_URL='http://localhost:8080/auth/google/callback'
 export SESSION_SECRET="$(openssl rand -base64 32)"
 export SESSION_COOKIE_SECURE='false'
 export SESSION_SAME_SITE='lax'
+export APP_URL='http://localhost:5173'
 export ALLOWED_ORIGINS='http://localhost:5173'
 docker compose up -d --wait
 go run ./cmd/migrate up
@@ -155,14 +156,15 @@ Google tokens are discarded after verification, never placed in cookies or logs.
 This single-process POC intentionally loses sessions and pending flows on restart.
 Multiple replicas or persistent sessions would require a later accepted design.
 
-After login, the callback redirects to `/api/v1/me`, which displays your JSON
-application profile. No frontend is implemented.
+After login, the callback redirects with 303 to the trusted configured `APP_URL`.
+The frontend then reads `/api/v1/me` with `credentials: "include"`. No frontend
+application is implemented in this repository.
 
 ## Phase 3 API contract
 
 - `GET /auth/google`: 302 to Google authorization.
 - `GET /auth/google/callback`: validates state and identity; successful login
-  creates a session and redirects with 303 to `/api/v1/me`. Invalid state returns
+  creates a session and redirects with 303 to `APP_URL`. Invalid state returns
   400; failed identity verification returns 401. Provider/DB details are hidden.
 - `GET /api/v1/me`: authenticated profile with `id`, `email`, `nickname`,
   nullable `avatar_url`, and UTC `created_at`. Google subject, session handles,
@@ -179,12 +181,12 @@ application profile. No frontend is implemented.
 For nickname updates from the browser developer console after signing in:
 
 ```js
-await fetch('/api/v1/me', {
+await fetch('http://localhost:8080/api/v1/me', {
   method: 'PATCH', credentials: 'include',
   headers: {'Content-Type': 'application/json'},
   body: JSON.stringify({nickname: 'Track driver'})
 }).then(r => r.json());
-await fetch('/api/v1/auth/logout', {method: 'POST', credentials: 'include'});
+await fetch('http://localhost:8080/api/v1/auth/logout', {method: 'POST', credentials: 'include'});
 ```
 
 All profile/error responses are JSON with Cache-Control: no-store. The normal
@@ -819,3 +821,123 @@ visibility counts, zero-setup accounts, tied-timestamp UUID ordering, HTML value
 escaping/privacy, 401/403/200 authorization, buffered template failures, direct
 admin repository failures while authentication remains healthy, and chassis
 page regression. Existing catalog mutation and admin CSRF suites remain in place.
+
+
+## Phase 11: separate frontend integration
+
+The committed **OpenAPI 3.1.0** contract is [`api/openapi.yaml`](api/openapi.yaml).
+It documents the implemented frontend endpoints, request bodies, response DTOs,
+cookie authentication, errors, schema-v1 technical data and public-search cursor
+pagination. Admin HTML remains separate. The same YAML is embedded verbatim and
+served without authentication or database access at `GET /openapi.yaml` with
+`Content-Type: application/yaml`. It contains no deployment secrets. Restart or
+rebuild the backend after editing the embedded contract.
+
+`APP_URL` is required for normal server startup. It is parsed once as an absolute
+HTTP/HTTPS URL with a non-empty host and valid port, without URL credentials.
+Whitespace is trimmed and host casing normalized. A configured landing-page
+path, query or fragment is preserved. Missing, relative or malformed values fail
+startup; errors do not echo the supplied URL. Migration commands still only need
+`DATABASE_URL`. `APP_URL` is a trusted redirect destination, while
+`ALLOWED_ORIGINS` independently controls exact credentialed API origins.
+Neither is derived from browser headers or query parameters. Per-request
+`return_to`/`redirect_uri` values cannot change the successful redirect.
+
+Local integration settings (in addition to the Google/session/database exports
+above):
+
+```sh
+export APP_URL='http://localhost:5173'
+export ALLOWED_ORIGINS='http://localhost:5173'
+export GOOGLE_REDIRECT_URL='http://localhost:8080/auth/google/callback'
+export SESSION_COOKIE_SECURE='false'
+export SESSION_SAME_SITE='lax'
+```
+
+Browser flow:
+
+```text
+frontend navigation to backend /auth/google
+  -> Google consent
+  -> backend /auth/google/callback
+  -> state/nonce/identity verification and user upsert
+  -> backend issues HttpOnly rc_session
+  -> 303 APP_URL (no tokens/session IDs in the URL)
+  -> frontend GET /api/v1/me with credentials: "include"
+```
+
+The current session mechanism is unchanged: host-only HttpOnly cookie, signed
+opaque handle, 24-hour lifetime, in-memory session/flow state, server-side logout
+revocation. Do not read/store authentication in JavaScript or localStorage. Use
+`localhost` consistently for browser frontend and backend; ports 5173/8080 are
+different origins but the same site, so local `SameSite=Lax` is sufficient.
+Production frontend/backend should both use HTTPS with `SESSION_COOKIE_SECURE=true`.
+Same-site deployments can retain Lax; a genuinely cross-site deployment requires
+`SESSION_SAME_SITE=none` and Secure. Browser third-party-cookie restrictions still
+apply. CORS never overrides cookie policy.
+
+From the separate frontend repository, generate TypeScript definitions instead
+of recreating DTOs manually. For example, using **openapi-typescript 7**:
+
+```sh
+npx openapi-typescript ../rc-setup-hub/backend/api/openapi.yaml -o src/generated/api.d.ts
+# Alternatively, while the backend is running:
+npx openapi-typescript http://localhost:8080/openapi.yaml -o src/generated/api.d.ts
+```
+
+Choose the file path appropriate to the separate frontend checkout. Generated
+TypeScript belongs there, not in this backend. The cursor is an opaque string;
+clients must repeat search filters and pass `next_cursor` unchanged. Search
+contains public summaries only, never friends/private rows, technical data or
+notes. Historical inactive chassis remain searchable. Setup details use schema
+version 1: optional numeric zero is meaningful, omitted/null means unknown.
+Setup PATCH leaves omitted top-level fields unchanged, permits null only for
+clearing notes/chassis_model_id, and replaces the entire supplied data document.
+
+Manual localhost verification (use the separately developed frontend or any
+local page served at http://localhost:5173):
+
+1. Start PostgreSQL, apply migrations, set all exports above, and run
+   `go run ./cmd/server`. Register Google's exact local redirect URI:
+   `http://localhost:8080/auth/google/callback`.
+2. Open `http://localhost:8080/openapi.yaml` or download it with
+   `curl -i http://localhost:8080/openapi.yaml`. Expect 200 and the committed YAML.
+3. In the browser, navigate to `http://localhost:8080/auth/google`, complete
+   Google consent, and inspect the callback in Network. Expect a session cookie
+   and `303 Location: http://localhost:5173`, without auth data in Location.
+4. On the frontend-origin page, run:
+
+   ```js
+   const response = await fetch('http://localhost:8080/api/v1/me', {
+     credentials: 'include'
+   });
+   console.log(response.status, await response.json());
+   ```
+
+   Expect 200 and the current profile. Network should show the session cookie,
+   `Access-Control-Allow-Origin: http://localhost:5173` and
+   `Access-Control-Allow-Credentials: true`. The session cookie stays HttpOnly.
+5. Check a mutation preflight (no Google session needed for OPTIONS):
+
+   ```sh
+   curl -i -X OPTIONS http://localhost:8080/api/v1/me \
+     -H 'Origin: http://localhost:5173' \
+     -H 'Access-Control-Request-Method: PATCH' \
+     -H 'Access-Control-Request-Headers: Content-Type'
+   ```
+
+   Repeat with `Origin: https://unconfigured.example`: no allowed-origin or
+   credentialed-access headers should be returned. Untrusted browser mutations
+   remain 403; cross-origin GET may execute but the browser cannot read its
+   response without allowed CORS headers.
+6. From the frontend console, POST logout with credentials; the next `/me`
+   returns 401. Changing a query parameter such as
+   `/auth/google?return_to=https://unconfigured.example` must still return to
+   configured APP_URL after successful login.
+
+`go test ./...` and `go test -race ./...` validate the OpenAPI document against
+the maintained libopenapi-validator specification schema, resolve its references,
+check endpoint/schema/privacy coverage, and validate representative serialized Go
+DTOs and PATCH/create bodies. Focused fake-Google/real-PostgreSQL tests also verify
+the frontend redirect, issued-session `/me`, and exact credentialed CORS. No live
+Google account/network request is needed for these tests.

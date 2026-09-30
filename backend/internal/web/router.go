@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/BlinovDev/rc-setup-hub/backend/api"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -14,6 +15,11 @@ func NewRouter(logger *slog.Logger, ping func(context.Context) error) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(requestLogging(logger))
 	r.Use(panicRecovery(logger))
+	r.Get("/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/yaml")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		_, _ = w.Write(api.OpenAPI)
+	})
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)

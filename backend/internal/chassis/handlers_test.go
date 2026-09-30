@@ -89,7 +89,7 @@ func TestCatalogHTTP(t *testing.T) {
 	pool := dbtest.New(t)
 	service := NewService(NewRepository(pool))
 	ctx := context.Background()
-	cfg := config.Auth{GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SessionSecret: bytes.Repeat([]byte("s"), 32), SameSite: http.SameSiteLaxMode, AdminEmails: []string{"admin@example.com"}, AllowedOrigins: []string{"http://localhost:5173"}}
+	cfg := config.Auth{AppURL: &url.URL{Scheme: "http", Host: "localhost:5173"}, GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SessionSecret: bytes.Repeat([]byte("s"), 32), SameSite: http.SameSiteLaxMode, AdminEmails: []string{"admin@example.com"}, AllowedOrigins: []string{"http://localhost:5173"}}
 	provider := &fakeGoogle{identity: users.Identity{Subject: "admin", Email: "admin@example.com", Name: "Admin"}}
 	authentication := auth.NewHandler(cfg, provider, users.NewService(users.NewRepository(pool)))
 	router := web.NewRouter(slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)), pool.Ping)

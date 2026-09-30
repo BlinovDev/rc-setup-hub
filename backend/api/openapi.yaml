@@ -1,0 +1,1312 @@
+openapi: 3.1.0
+info:
+  title: RC Setup Hub frontend API
+  version: 1.0.0
+  description: 'Phase 11 contract for the separately developed frontend. JSON API
+    uses backend-managed HttpOnly rc_session cookies. Google OAuth -> backend callback
+    -> session cookie -> 303 APP_URL. Frontend requests require credentials: "include"
+    and an exact ALLOWED_ORIGINS entry. No Google tokens are delivered to the frontend;
+    never use localStorage auth. All /api/v1 endpoints require a session. Error bodies
+    are {"error":"human-readable message"}. Browser mutations require a trusted configured
+    Origin; admin HTML routes are separate and not documented here.'
+servers:
+  - url: http://localhost:8080
+    description: Local backend; override this URL for deployed environments.
+security:
+  - CookieAuth: []
+tags:
+  - name: Health
+  - name: Authentication
+  - name: Users
+  - name: Friendships
+  - name: Chassis
+  - name: Setups
+  - name: Documentation
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Check service/database health
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        "503":
+          description: Database unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+      security: []
+  /auth/google:
+    get:
+      operationId: startGoogleLogin
+      summary: Start Google login
+      tags:
+        - Authentication
+      responses:
+        "302":
+          description: Success
+          headers:
+            Location:
+              description: Redirect destination.
+              schema:
+                type: string
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: 'Navigate the browser here; do not use fetch for the Google redirect
+        flow. Identity scopes: openid email profile. Backend creates a short-lived
+        single-use browser-bound state, nonce and PKCE verifier, then redirects to
+        Google. Arbitrary return_to/redirect parameters are ignored.'
+      security: []
+  /auth/google/callback:
+    get:
+      operationId: completeGoogleLogin
+      summary: Complete Google login
+      tags:
+        - Authentication
+      responses:
+        "303":
+          description: Success
+          headers:
+            Location:
+              description: Redirect destination.
+              schema:
+                type: string
+            Set-Cookie:
+              description: Creates the backend-owned HttpOnly rc_session cookie. Tokens
+                and session data are never appended to Location.
+              schema:
+                type: string
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: Google redirects here. Backend verifies OAuth state, nonce and
+        Google identity, upserts the user by stable Google subject and creates its
+        own session. Redirects with 303 to trusted server-configured APP_URL. Never
+        redirects to a request-supplied destination. Frontend receives no Google tokens.
+        The callback requires the browser-bound OAuth state cookie from login start.
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Google authorization code; required on successful authorization.
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Must match the unexpired single-use state and browser cookie.
+        - name: error
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Google authorization failure; returns 400.
+      security: []
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      summary: Invalidate the current session
+      tags:
+        - Authentication
+      responses:
+        "204":
+          description: Success
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: Revokes the server-side session and clears the HttpOnly cookie.
+        No JSON response body.
+  /api/v1/me:
+    get:
+      operationId: getMe
+      summary: Get current profile
+      tags:
+        - Users
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "500":
+          $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: patchMe
+      summary: Change current nickname
+      tags:
+        - Users
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "415":
+          $ref: '#/components/responses/UnsupportedMediaType'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: Trims whitespace; rejects empty/overlong nickname. Case-insensitive
+        duplicate nickname returns 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchMe'
+  /api/v1/users/search:
+    get:
+      operationId: searchUsers
+      summary: Find users by nickname
+      tags:
+        - Users
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicProfile'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: Excludes the current user. At most 20 results, ordered by lower(nickname),
+        id. Only safe public profile fields are returned; percent/underscore are literal
+        characters.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 64
+          description: Trimmed, literal case-insensitive nickname substring (not email).
+            Empty/omitted returns []. No null bytes.
+  /api/v1/friendships:
+    get:
+      operationId: listFriendships
+      summary: List requests and accepted friends
+      tags:
+        - Friendships
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendshipList'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "500":
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: createFriendship
+      summary: Send a pending friend request
+      tags:
+        - Friendships
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendshipRelationship'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: Self request is 400; missing target is 404. Any existing pending
+        or accepted relationship in either direction is 409, including concurrent
+        opposite requests.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFriendship'
+  /api/v1/friendships/{id}/accept:
+    post:
+      operationId: acceptFriendship
+      summary: Accept an incoming pending request
+      tags:
+        - Friendships
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendshipRelationship'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: Only the pending addressee can accept. Requester/unrelated/missing
+        returns 404. Already accepted returns 409 for the addressee. Accepted friendship
+        immediately enables friends-only detail access. No request body is needed.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Resource UUID.
+  /api/v1/friendships/{id}:
+    delete:
+      operationId: deleteFriendship
+      summary: Cancel, reject or remove a relationship
+      tags:
+        - Friendships
+      responses:
+        "204":
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: Either participant may delete. Pending requester cancels, pending
+        addressee rejects; accepted deletion removes friendship. Physically deletes
+        the row; friends-only access disappears immediately and a future request may
+        be created. Unrelated/missing returns 404.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Resource UUID.
+  /api/v1/chassis/brands:
+    get:
+      operationId: listChassisBrands
+      summary: List active brands
+      tags:
+        - Chassis
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChassisBrand'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: Selection API returns active brands only. Custom/not listed is
+        a client-only synthetic option, represented in setups by chassis_model_id=null.
+  /api/v1/chassis/brands/{brand_id}/models:
+    get:
+      operationId: listChassisModels
+      summary: List active models under an active brand
+      tags:
+        - Chassis
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChassisModel'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: Unknown or inactive brand returns 404. Inactive models are excluded
+        even when the brand is active.
+      parameters:
+        - name: brand_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Resource UUID.
+  /api/v1/setups:
+    post:
+      operationId: createSetup
+      summary: Create an owned setup
+      tags:
+        - Setups
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Setup'
+          headers:
+            Location:
+              description: Relative URL of the created setup.
+              schema:
+                type: string
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSetup'
+  /api/v1/setups/{id}:
+    get:
+      operationId: getSetup
+      summary: Read a visible setup
+      tags:
+        - Setups
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Setup'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: Owner sees every visibility. Other authenticated users see public;
+        accepted friends also see friends-only. Private remains owner-only; pending
+        relationships grant no access. Missing/inaccessible returns the same 404,
+        before protected technical data decoding. Public still requires authentication.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Resource UUID.
+    patch:
+      operationId: patchSetup
+      summary: Partially update an owned setup
+      tags:
+        - Setups
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Setup'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: Owner-only, including public/friends setups. Missing/not-owned
+        returns 404. Omitted fields are unchanged; nullable notes/chassis_model_id
+        may be cleared. Supplied data replaces the entire document. Schema version/owner
+        cannot be patched. Concurrent row update can return 409; reload before retry.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Resource UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchSetup'
+    delete:
+      operationId: deleteSetup
+      summary: Delete an owned setup
+      tags:
+        - Setups
+      responses:
+        "204":
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: Owner-only regardless of visibility or friendship. Missing/not-owned
+        returns 404; success has no response body.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Resource UUID.
+  /api/v1/me/setups:
+    get:
+      operationId: listMySetups
+      summary: List all owned setups
+      tags:
+        - Setups
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Setup'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: All current user setups, regardless of visibility, newest first
+        (created_at DESC, id DESC). No pagination.
+  /api/v1/users/{user_id}/setups:
+    get:
+      operationId: listUserSetups
+      summary: List a user’s visible setups
+      tags:
+        - Setups
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Setup'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: Owner sees all; accepted friend sees public+friends; unrelated/pending
+        sees public only. Private never appears for another user. Newest first (created_at
+        DESC, id DESC). No pagination. A valid unknown user UUID returns [].
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Resource UUID.
+  /api/v1/setups/search:
+    get:
+      operationId: searchPublicSetups
+      summary: Browse/search public setups
+      tags:
+        - Setups
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupSearchPage'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      description: 'Authenticated PUBLIC discovery only: even owner/accepted friend
+        never receives private/friends setups here. Filters combine with AND; disagreeing
+        brand/model returns zero results. Custom chassis matches only unfiltered queries.
+        Inactive historical catalog values remain searchable and displayable. Ordered
+        created_at DESC, id DESC with keyset pagination. Empty response is {"items":[],"next_cursor":null}.'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+          description: Trimmed literal case-insensitive substring of title OR owner
+            nickname. Empty/omitted means no text filter; percent/underscore are literal.
+            No null bytes. Never searches email, notes or technical data.
+        - name: brand_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Filter by historical parent brand. Valid nonexistent UUID yields
+            zero results.
+        - name: model_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Filter by exact historical chassis model. Valid nonexistent
+            UUID yields zero results.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+          description: Maximum page size.
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Opaque next-page cursor from the previous response. Invalid
+            cursor returns 400. Repeat q/brand_id/model_id and desired limit on subsequent
+            requests.
+  /openapi.yaml:
+    get:
+      operationId: getOpenAPI
+      summary: Download the committed API contract
+      tags:
+        - Documentation
+      responses:
+        "200":
+          description: Embedded source contract.
+          content:
+            application/yaml:
+              schema:
+                type: string
+      security: []
+components:
+  securitySchemes:
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: rc_session
+      description: Backend-issued HttpOnly cookie, never a frontend-managed token.
+        Local HTTP uses SameSite=Lax, Secure=false. Production uses Secure=true; SameSite=None
+        requires Secure for genuinely cross-site deployments. Sessions are in-memory,
+        expire after 24h and are revoked on logout; server restart invalidates them.
+  schemas:
+    APIError:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+      required:
+        - error
+      description: Human-readable error; internal database/authentication details
+        are not returned.
+    Health:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - unavailable
+      required:
+        - status
+    User:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        nickname:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Trimmed, non-empty nickname, case-insensitively unique. No
+            null bytes.
+        avatar_url:
+          type:
+            - string
+            - "null"
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - email
+        - nickname
+        - avatar_url
+        - created_at
+      description: Current authenticated application profile. Email is exposed only
+        to this user.
+    PublicProfile:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        nickname:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Trimmed, non-empty nickname, case-insensitively unique. No
+            null bytes.
+        avatar_url:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - nickname
+        - avatar_url
+      description: 'Safe public profile: no email or provider identity.'
+    ChassisBrand:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+      required:
+        - id
+        - name
+      description: Active catalog selection value; no synthetic Custom record exists.
+    ChassisModel:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+      required:
+        - id
+        - name
+      description: Active catalog selection value; no synthetic Custom record exists.
+    SetupDataV1:
+      type: object
+      additionalProperties: false
+      properties:
+        suspension:
+          anyOf:
+            - $ref: '#/components/schemas/Suspension'
+            - type: "null"
+        shocks:
+          anyOf:
+            - $ref: '#/components/schemas/Shocks'
+            - type: "null"
+        electronics:
+          anyOf:
+            - $ref: '#/components/schemas/Electronics'
+            - type: "null"
+      description: Schema version 1 technical document. All sections are optional;
+        null sections are omitted on output. Unknown fields are rejected on input.
+        Explicit numeric zero is preserved; omitted/null optional numeric values are
+        unknown. PATCH replaces this entire document, without a deep merge.
+    Suspension:
+      type: object
+      additionalProperties: false
+      properties:
+        front:
+          anyOf:
+            - $ref: '#/components/schemas/AxleSuspension'
+            - type: "null"
+        rear:
+          anyOf:
+            - $ref: '#/components/schemas/AxleSuspension'
+            - type: "null"
+    AxleSuspension:
+      type: object
+      additionalProperties: false
+      properties:
+        camber_deg:
+          type:
+            - number
+            - "null"
+          description: Optional finite angle in degrees. Omitted/null means unknown
+            and is omitted in responses; zero is a real value and is preserved.
+        caster_deg:
+          type:
+            - number
+            - "null"
+          description: Optional finite angle in degrees. Omitted/null means unknown
+            and is omitted in responses; zero is a real value and is preserved.
+        toe_deg:
+          type:
+            - number
+            - "null"
+          description: Optional finite angle in degrees. Omitted/null means unknown
+            and is omitted in responses; zero is a real value and is preserved.
+          examples:
+            - 0
+            - -1.5
+        link_lengths:
+          type:
+            - array
+            - "null"
+          items:
+            $ref: '#/components/schemas/LinkLength'
+          maxItems: 100
+          description: Omitted/null/empty lists are omitted in responses.
+    LinkLength:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Trimmed non-empty name without null bytes.
+        length_mm:
+          type: number
+          exclusiveMinimum: 0
+      required:
+        - name
+        - length_mm
+    Shocks:
+      type: object
+      additionalProperties: false
+      properties:
+        front:
+          anyOf:
+            - $ref: '#/components/schemas/Shock'
+            - type: "null"
+        rear:
+          anyOf:
+            - $ref: '#/components/schemas/Shock'
+            - type: "null"
+    Shock:
+      type: object
+      additionalProperties: false
+      properties:
+        manufacturer:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+          description: Trimmed technical text without null bytes. Null, omitted or
+            empty text is omitted in responses.
+        model:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+          description: Trimmed technical text without null bytes. Null, omitted or
+            empty text is omitted in responses.
+        spring:
+          anyOf:
+            - $ref: '#/components/schemas/Spring'
+            - type: "null"
+        oil_cst:
+          type:
+            - number
+            - "null"
+          exclusiveMinimum: 0
+          description: Optional viscosity in cSt. Must be positive when supplied.
+            Null/omitted means unknown and is omitted on output.
+    Spring:
+      type: object
+      additionalProperties: false
+      properties:
+        manufacturer:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+          description: Trimmed technical text without null bytes. Null, omitted or
+            empty text is omitted in responses.
+        color:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+          description: Trimmed technical text without null bytes. Null, omitted or
+            empty text is omitted in responses.
+    Electronics:
+      type: object
+      additionalProperties: false
+      properties:
+        motor:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+          description: Trimmed technical text without null bytes. Null, omitted or
+            empty text is omitted in responses.
+        esc:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+          description: Trimmed technical text without null bytes. Null, omitted or
+            empty text is omitted in responses.
+        servo:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+          description: Trimmed technical text without null bytes. Null, omitted or
+            empty text is omitted in responses.
+        gyro:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+          description: Trimmed technical text without null bytes. Null, omitted or
+            empty text is omitted in responses.
+        radio:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+          description: Trimmed technical text without null bytes. Null, omitted or
+            empty text is omitted in responses.
+    Setup:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        chassis_model_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+          description: Whitespace is trimmed. Must remain non-empty and contain no
+            null bytes.
+        visibility:
+          type: string
+          enum:
+            - public
+            - friends
+            - private
+        data:
+          $ref: '#/components/schemas/SetupDataV1'
+        notes:
+          type:
+            - string
+            - "null"
+          maxLength: 10000
+          description: Optional free-form text; no null bytes. Null clears notes.
+        schema_version:
+          type: integer
+          const: 1
+          description: Backend-owned; all current detail documents use schema version
+            1.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - chassis_model_id
+        - title
+        - visibility
+        - data
+        - notes
+        - schema_version
+        - created_at
+        - updated_at
+      description: Complete setup. Owner ID is not exposed. Inactive historical chassis
+        references remain intact.
+    CreateSetup:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+          description: Whitespace is trimmed. Must remain non-empty and contain no
+            null bytes.
+        chassis_model_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: Null/omitted means custom, unlisted or unspecified chassis.
+            Non-null selection must exist, with active model and brand.
+        visibility:
+          type: string
+          enum:
+            - public
+            - friends
+            - private
+        notes:
+          type:
+            - string
+            - "null"
+          maxLength: 10000
+          description: Optional free-form text; no null bytes. Null clears notes.
+        data:
+          $ref: '#/components/schemas/SetupDataV1'
+      required:
+        - title
+        - visibility
+        - data
+      description: 'Owner is the session user; schema_version is set to 1. Client
+        owner_id/schema_version and all other unknown fields are rejected. JSON body
+        limit: 256 KiB.'
+    PatchSetup:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+          description: Whitespace is trimmed. Must remain non-empty and contain no
+            null bytes.
+        chassis_model_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: Omitted leaves unchanged; null clears the reference. Unchanged
+            historical inactive references are allowed; any newly selected model and
+            brand must be active.
+        visibility:
+          type: string
+          enum:
+            - public
+            - friends
+            - private
+        notes:
+          type:
+            - string
+            - "null"
+          maxLength: 10000
+          description: Optional free-form text; no null bytes. Null clears notes.
+        data:
+          $ref: '#/components/schemas/SetupDataV1'
+      description: 'True partial top-level update. Every omitted field stays unchanged.
+        Only notes and chassis_model_id may be explicitly null to clear. Title, visibility
+        and data cannot be null. Supplied data replaces the complete schema-v1 document,
+        without recursive merge. Empty object is allowed. Owner_id/schema_version
+        and unknown fields are rejected. JSON body limit: 256 KiB.'
+    PatchMe:
+      type: object
+      additionalProperties: false
+      properties:
+        nickname:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Trimmed, non-empty nickname, case-insensitively unique. No
+            null bytes.
+      required:
+        - nickname
+      description: 'Nickname only. Unknown fields are rejected. JSON body limit: 4096
+        bytes.'
+    SetupSearchChassis:
+      type: object
+      additionalProperties: false
+      properties:
+        model_id:
+          type: string
+          format: uuid
+        model_name:
+          type: string
+        brand_id:
+          type: string
+          format: uuid
+        brand_name:
+          type: string
+      required:
+        - model_id
+        - model_name
+        - brand_id
+        - brand_name
+      description: Historical chassis display information, including inactive catalog
+        values.
+    SetupSearchItem:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+          description: Whitespace is trimmed. Must remain non-empty and contain no
+            null bytes.
+        chassis_model_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        visibility:
+          type: string
+          const: public
+        schema_version:
+          type: integer
+          minimum: 1
+          description: Stored version metadata; browse summaries do not decode technical
+            data.
+        owner:
+          $ref: '#/components/schemas/PublicProfile'
+        chassis:
+          anyOf:
+            - $ref: '#/components/schemas/SetupSearchChassis'
+            - type: "null"
+      required:
+        - id
+        - title
+        - chassis_model_id
+        - created_at
+        - updated_at
+        - visibility
+        - schema_version
+        - owner
+        - chassis
+      description: Public browse summary. Technical data/notes are available only
+        via the detail endpoint.
+    SetupSearchPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SetupSearchItem'
+        next_cursor:
+          type:
+            - string
+            - "null"
+          description: Opaque next-page cursor. Null when no more results exist. Repeat
+            the same filters with this cursor.
+      required:
+        - items
+        - next_cursor
+    FriendshipRelationship:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        requester_id:
+          type: string
+          format: uuid
+        addressee_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - pending
+            - accepted
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - requester_id
+        - addressee_id
+        - status
+        - created_at
+        - updated_at
+    FriendshipItem:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        user:
+          $ref: '#/components/schemas/PublicProfile'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - user
+        - created_at
+        - updated_at
+      description: Relationship ID and the OTHER participant profile, regardless of
+        original request direction.
+    FriendshipList:
+      type: object
+      additionalProperties: false
+      properties:
+        incoming:
+          type: array
+          items:
+            $ref: '#/components/schemas/FriendshipItem'
+        outgoing:
+          type: array
+          items:
+            $ref: '#/components/schemas/FriendshipItem'
+        accepted:
+          type: array
+          items:
+            $ref: '#/components/schemas/FriendshipItem'
+      required:
+        - incoming
+        - outgoing
+        - accepted
+      description: Incoming/outgoing contain pending requests; accepted contains either
+        direction. Each group is ordered by updated_at DESC, id DESC.
+    CreateFriendship:
+      type: object
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+          format: uuid
+      required:
+        - user_id
+      description: 'Target user only; requester comes from the authenticated session.
+        JSON body limit: 4096 bytes.'
+  responses:
+    BadRequest:
+      description: Invalid input, query, UUID, JSON or OAuth state.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+    Unauthorized:
+      description: No valid application session or Google identity verification failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+    Forbidden:
+      description: Untrusted browser mutation origin.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+    NotFound:
+      description: Missing or inaccessible resource; setup ownership/existence is
+        not disclosed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+    Conflict:
+      description: Uniqueness, relationship state or concurrent update conflict.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+    UnsupportedMediaType:
+      description: Content-Type must be application/json.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+    InternalError:
+      description: Unexpected failure; no internal error details.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'

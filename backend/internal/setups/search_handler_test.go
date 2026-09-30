@@ -23,7 +23,7 @@ func TestSearchHTTP(t *testing.T) {
 	f := newSearchFixture(t)
 	ctx := context.Background()
 	provider := &fakeGoogle{}
-	cfg := config.Auth{GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SessionSecret: bytes.Repeat([]byte("s"), 32), SameSite: http.SameSiteLaxMode}
+	cfg := config.Auth{AppURL: &url.URL{Scheme: "http", Host: "localhost:5173"}, GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SessionSecret: bytes.Repeat([]byte("s"), 32), SameSite: http.SameSiteLaxMode}
 	authentication := auth.NewHandler(cfg, provider, users.NewService(users.NewRepository(f.pool)))
 	router := web.NewRouter(slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)), f.pool.Ping)
 	authentication.Register(router, NewHandler(f.service).RegisterAPI, friendships.NewHandler(friendships.NewService(friendships.NewRepository(f.pool))).RegisterAPI)

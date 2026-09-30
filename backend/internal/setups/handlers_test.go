@@ -82,7 +82,7 @@ func TestSetupHTTP(t *testing.T) {
 	ctx := context.Background()
 	catalog := chassis.NewService(chassis.NewRepository(pool))
 	service := NewService(NewRepository(pool), catalog, friendships.NewRepository(pool))
-	cfg := config.Auth{GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SessionSecret: bytes.Repeat([]byte("s"), 32), SameSite: http.SameSiteLaxMode, AllowedOrigins: []string{"http://localhost:5173"}}
+	cfg := config.Auth{AppURL: &url.URL{Scheme: "http", Host: "localhost:5173"}, GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SessionSecret: bytes.Repeat([]byte("s"), 32), SameSite: http.SameSiteLaxMode, AllowedOrigins: []string{"http://localhost:5173"}}
 	provider := &fakeGoogle{identity: users.Identity{Subject: "owner", Email: "owner@example.com", Name: "Owner"}}
 	authentication := auth.NewHandler(cfg, provider, users.NewService(users.NewRepository(pool)))
 	router := web.NewRouter(slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)), pool.Ping)

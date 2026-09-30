@@ -24,12 +24,13 @@ type Handler struct {
 	sessions      *Sessions
 	origins       []string
 	backendOrigin string
+	appURL        string
 }
 
 func NewHandler(c config.Auth, provider Provider, service *users.Service) *Handler {
 	redirect, _ := url.Parse(c.GoogleRedirectURL)
 	return &Handler{provider: provider, users: service, sessions: NewSessions(c), origins: c.AllowedOrigins,
-		backendOrigin: redirect.Scheme + "://" + redirect.Host}
+		appURL: c.AppURL.String(), backendOrigin: redirect.Scheme + "://" + redirect.Host}
 }
 func (h *Handler) Register(r chi.Router, apiRoutes ...func(chi.Router)) {
 	r.Get("/auth/google", h.login)
@@ -113,7 +114,7 @@ func (h *Handler) callback(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "authentication unavailable")
 		return
 	}
-	http.Redirect(w, r, "/api/v1/me", http.StatusSeeOther)
+	http.Redirect(w, r, h.appURL, http.StatusSeeOther)
 }
 
 type userContextKey struct{}

@@ -14,6 +14,7 @@ import (
 // Auth contains server-only OAuth and cookie configuration.
 type Auth struct {
 	GoogleClientID, GoogleClientSecret, GoogleRedirectURL string
+	AppURL                                                *url.URL
 	SessionSecret                                         []byte
 	CookieSecure                                          bool
 	SameSite                                              http.SameSite
@@ -31,6 +32,11 @@ func LoadAuth() (Auth, error) {
 		if field.value == "" {
 			return c, fmt.Errorf("%s is required", field.name)
 		}
+	}
+	var err error
+	c.AppURL, err = ParseAppURL(os.Getenv("APP_URL"))
+	if err != nil {
+		return c, err
 	}
 	u, err := url.Parse(c.GoogleRedirectURL)
 	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "/auth/google/callback" || (u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1"))) {

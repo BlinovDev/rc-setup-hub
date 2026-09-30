@@ -51,7 +51,7 @@ func TestFriendshipHTTPAndVisibility(t *testing.T) {
 	catalog := chassis.NewService(chassis.NewRepository(pool))
 	setupHandler := setups.NewHandler(setups.NewService(setups.NewRepository(pool), catalog, repo))
 	provider := &fakeGoogle{}
-	cfg := config.Auth{GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SessionSecret: bytes.Repeat([]byte("s"), 32), SameSite: http.SameSiteLaxMode}
+	cfg := config.Auth{AppURL: &url.URL{Scheme: "http", Host: "localhost:5173"}, GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SessionSecret: bytes.Repeat([]byte("s"), 32), SameSite: http.SameSiteLaxMode}
 	authentication := auth.NewHandler(cfg, provider, userService)
 	router := web.NewRouter(slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)), pool.Ping)
 	authentication.Register(router, friendshipHandler.RegisterAPI, setupHandler.RegisterAPI, func(r chi.Router) { users.NewHandler(userService).RegisterAPI(r, auth.CurrentUser) })

@@ -27,7 +27,7 @@ func (f fakeGoogle) Exchange(context.Context, string, string, string) (users.Ide
 	return f.identity, nil
 }
 func settings() config.Auth {
-	return config.Auth{SessionSecret: bytes.Repeat([]byte("s"), 32), GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SameSite: http.SameSiteLaxMode}
+	return config.Auth{AppURL: &url.URL{Scheme: "http", Host: "localhost:5173"}, SessionSecret: bytes.Repeat([]byte("s"), 32), GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SameSite: http.SameSiteLaxMode}
 }
 func call(router http.Handler, path string, cookie *http.Cookie) *httptest.ResponseRecorder {
 	r := httptest.NewRequest("GET", path, nil)

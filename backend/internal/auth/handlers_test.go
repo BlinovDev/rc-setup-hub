@@ -38,7 +38,7 @@ func (f *fakeProvider) Exchange(ctx context.Context, code, nonce, verifier strin
 	return f.identity, f.err
 }
 func testConfig() config.Auth {
-	return config.Auth{SessionSecret: bytes.Repeat([]byte("s"), 32), GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SameSite: http.SameSiteLaxMode, AllowedOrigins: []string{"http://localhost:5173"}}
+	return config.Auth{AppURL: &url.URL{Scheme: "http", Host: "localhost:5173"}, SessionSecret: bytes.Repeat([]byte("s"), 32), GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SameSite: http.SameSiteLaxMode, AllowedOrigins: []string{"http://localhost:5173"}}
 }
 func request(router http.Handler, method, path, body string, cookie *http.Cookie) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -193,5 +193,66 @@ func TestOAuthState(t *testing.T) {
 	h.sessions.now = func() time.Time { return time.Now().Add(stateTTL + time.Second) }
 	if w := request(router, "GET", "/auth/google/callback?code=fake-code&state="+state, "", cookie); w.Code != 400 {
 		t.Fatal("expired state accepted")
+	}
+}
+
+func TestFrontendRedirectAndCORS(t *testing.T) {
+	pool := dbtest.New(t)
+	fake := &fakeProvider{identity: users.Identity{Subject: "frontend-subject", Email: "frontend@example.com", Name: "Frontend"}}
+	cfg := testConfig()
+	cfg.AppURL, _ = url.Parse("http://localhost:5173/welcome")
+	h := NewHandler(cfg, fake, users.NewService(users.NewRepository(pool)))
+	router := web.NewRouter(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), pool.Ping)
+	h.Register(router)
+	w := request(router, "GET", "/auth/google?return_to=https://evil.example", "", nil)
+	target, err := url.Parse(w.Header().Get("Location"))
+	if err != nil || w.Code != http.StatusFound {
+		t.Fatalf("start: %d %v", w.Code, err)
+	}
+	state := target.Query().Get("state")
+	w = request(router, "GET", "/auth/google/callback?code=fake-code&state="+url.QueryEscape(state)+"&return_to=https://evil.example&redirect_uri=https://evil.example", "", findCookie(t, w, stateCookie))
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != cfg.AppURL.String() {
+		t.Fatalf("callback: %d %s", w.Code, w.Header().Get("Location"))
+	}
+	cookie := findCookie(t, w, sessionCookie)
+	if !cookie.HttpOnly || cookie.Secure || cookie.SameSite != http.SameSiteLaxMode {
+		t.Fatal("session cookie protections changed")
+	}
+	for _, secret := range []string{cookie.Value, state, "fake-code", "frontend-subject", string(cfg.SessionSecret)} {
+		if strings.Contains(w.Header().Get("Location"), secret) {
+			t.Fatal("authentication data in redirect")
+		}
+	}
+	for _, origin := range []string{"http://localhost:5173", "https://evil.example"} {
+		t.Run(origin, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/api/v1/me", nil)
+			req.AddCookie(cookie)
+			req.Header.Set("Origin", origin)
+			result := httptest.NewRecorder()
+			router.ServeHTTP(result, req)
+			if result.Code != 200 || !strings.Contains(result.Body.String(), "frontend@example.com") {
+				t.Fatal("issued session cannot read me", result.Code, result.Body)
+			}
+			if origin == cfg.AllowedOrigins[0] {
+				if result.Header().Get("Access-Control-Allow-Origin") != origin || result.Header().Get("Access-Control-Allow-Credentials") != "true" {
+					t.Fatal("credentialed CORS missing", result.Header())
+				}
+			} else if result.Header().Get("Access-Control-Allow-Origin") != "" || result.Header().Get("Access-Control-Allow-Credentials") != "" {
+				t.Fatal("unconfigured origin authorized", result.Header())
+			}
+			preflight := httptest.NewRequest("OPTIONS", "/api/v1/me", nil)
+			preflight.Header.Set("Origin", origin)
+			preflight.Header.Set("Access-Control-Request-Method", "PATCH")
+			preflight.Header.Set("Access-Control-Request-Headers", "Content-Type")
+			result = httptest.NewRecorder()
+			router.ServeHTTP(result, preflight)
+			if origin == cfg.AllowedOrigins[0] {
+				if result.Header().Get("Access-Control-Allow-Origin") != origin || result.Header().Get("Access-Control-Allow-Credentials") != "true" {
+					t.Fatal("preflight denied", result.Header())
+				}
+			} else if result.Header().Get("Access-Control-Allow-Origin") != "" {
+				t.Fatal("untrusted preflight allowed")
+			}
+		})
 	}
 }
