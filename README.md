@@ -41,6 +41,8 @@ Start with:
 
 - `AGENTS.md` — instructions for coding agents.
 - `AI/main.md` — project context entry point.
+- `AI/product.md` — current product behavior and business rules.
+- `AI/workflow.md` — durable feature/PR/staging/QA/production lifecycle.
 - `AI/roadmap.md` — ordered implementation plan and checkpoints.
 - `AI/database.md` — accepted database model.
 - `AI/api.md` — intended HTTP contract.
@@ -49,6 +51,6 @@ Start with:
 
 ## Current status
 
-Database and POC scope are approved. Implementation has not started yet.
+Core backend POC flows are implemented: Google authentication/session handling, profiles, chassis catalog/admin, setup CRUD and visibility, friendships, public setup search, public profiles, and the frontend OpenAPI contract.
 
-The first implementation milestone is project bootstrap and a working health endpoint with PostgreSQL connectivity.
+The next infrastructure milestone is hardening and deployment, including isolated staging/production configuration, migration/deploy procedures, backups, health/smoke checks, and CI/CD automation.
