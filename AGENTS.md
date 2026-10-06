@@ -4,7 +4,9 @@ This repository is built incrementally. Keep changes small, testable, and easy t
 
 ## Read before changing code
 
-Start with `AI/main.md`. Then read only the documents relevant to the task:
+Start with `AI/main.md` and `AI/product.md`. For feature delivery or work that may reach staging/production, also read `AI/workflow.md`. Then read only the documents relevant to the task:
+- product/business rules: `AI/product.md`
+- feature delivery lifecycle: `AI/workflow.md`
 - architecture: `AI/architecture.md`
 - database: `AI/database.md`
 - API: `AI/api.md`
@@ -13,12 +15,15 @@ Start with `AI/main.md`. Then read only the documents relevant to the task:
 - implementation sequence: `AI/roadmap.md`
 - accepted decisions: `AI/decisions.md`
 
-Do not silently change accepted decisions. If a task conflicts with `AI/decisions.md`, stop and explain the conflict.
+Do not silently change accepted decisions or business rules. If a task conflicts with `AI/decisions.md` or materially changes `AI/product.md`, make that change explicit in the specification/PR instead of guessing.
+
+For new feature requests, treat GitHub Issue/PR state and repository docs as durable context. Do not rely on previous chat history being available.
 
 ## Development rules
 
-- Implement one roadmap step at a time.
-- Do not add features that are not required by the current roadmap step.
+- For roadmap work, implement one roadmap step at a time.
+- For post-roadmap feature work, implement only the approved acceptance criteria.
+- Do not add features opportunistically.
 - Prefer simple code over generic abstractions.
 - Keep `cmd/server` limited to application wiring.
 - Domain logic belongs in the corresponding `internal/...` package.
@@ -29,13 +34,16 @@ Do not silently change accepted decisions. If a task conflicts with `AI/decision
 - Never commit secrets or real credentials.
 - Do not replace PostgreSQL with another database.
 - Do not replace structured Go setup types with arbitrary `map[string]any`.
+- Update `AI/product.md` in the same PR when user-visible behavior or a business rule changes.
+- For cross-repository API changes, update backend OpenAPI first and keep the frontend PR linked.
 
 ## Completion rule
 
-A roadmap task is complete only when:
+A task is complete only when:
 1. implementation matches its acceptance criteria;
 2. relevant tests pass;
 3. no unrelated behavior was changed;
-4. documentation is updated if the contract changed.
+4. documentation is updated when product behavior or a contract changed;
+5. staging/QA/production gates in `AI/workflow.md` are respected when applicable.
 
 When asked to implement a roadmap phase, first state which checklist items you will complete, then implement them and report the tests executed.
