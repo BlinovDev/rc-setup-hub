@@ -109,3 +109,14 @@ APP_URL and ALLOWED_ORIGINS are separate settings. Frontend requests use
 credentials: "include"; frontend JavaScript never receives or stores Google or
 backend auth tokens/session handles. No JWT/localStorage auth is introduced.
 Existing cookie lifetime/logout, Secure/SameSite and exact CORS behavior remain.
+
+
+## D012 — Backend repository coordinates combined deployments
+
+Status: accepted.
+
+The backend repository is the sole GitHub Actions coordinator for staging and production. Both repositories keep independent CI, but deployment credentials and the combined deploy workflow live only here.
+
+Every deployment is a combined release identified by explicit backend and frontend commit SHAs and containing the Go server, migrator and environment-specific frontend build. One-sided features still select a compatible SHA from the unchanged repository.
+
+Staging and production are separate builds. Production deployment is manually dispatched in V1 and both submitted SHAs must be reachable from their respective `main` histories.

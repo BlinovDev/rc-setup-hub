@@ -93,3 +93,16 @@ A feature is done only when:
 - documentation reflects changed product/contract behavior;
 - the approved change is merged to `main`;
 - production deployment and smoke checks succeed.
+
+
+## Concrete CI/CD implementation
+
+Both repositories run CI for pull requests and pushes to `main`. CI does not receive deployment credentials.
+
+Combined staging/production deployment is coordinated only by the backend repository's manually dispatched `.github/workflows/deploy.yml`. A release always selects one explicit backend ref and one explicit frontend ref, resolves both once to full SHAs, validates/builds that pair, and packages one combined release.
+
+Staging is a shared QA environment, so deployment is explicit rather than automatic for every PR update. Record the selected QA SHA pair on the related Issue/PRs.
+
+Production deployment is also explicit in V1. Merge accepted changes first, then deploy the resulting main-reachable SHA pair. Production is never deployed directly from an unmerged feature branch.
+
+See `AI/deployment.md` for GitHub Environment requirements, server protocol, migration/health behavior and recovery limitations.

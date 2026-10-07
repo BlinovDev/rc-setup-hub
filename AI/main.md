@@ -80,3 +80,7 @@ Admin authorization is not stored as a role in the database. The backend reads a
 - `AI/database.md`
 - `AI/api.md`
 - `AI/roadmap.md`
+
+## Deployment
+
+See `AI/deployment.md` for the concrete CI, paired-release, staging, production and recovery contract.
