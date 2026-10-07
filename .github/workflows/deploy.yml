@@ -1,0 +1,166 @@
+name: Deploy combined release
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [staging, production]
+      backend_ref:
+        description: Backend branch, tag, or SHA
+        required: true
+        default: main
+        type: string
+      frontend_ref:
+        description: Frontend branch, tag, or SHA
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rc-setup-hub-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      backend_sha: ${{ steps.refs.outputs.backend_sha }}
+      frontend_sha: ${{ steps.refs.outputs.frontend_sha }}
+    steps:
+      - name: Resolve selected refs once
+        id: refs
+        env:
+          BACKEND_REF: ${{ inputs.backend_ref }}
+          FRONTEND_REF: ${{ inputs.frontend_ref }}
+        run: |
+          set -euo pipefail
+          resolve() {
+            local repo="$1" ref="$2"
+            local tmp
+            tmp="$(mktemp -d)"
+            git -C "$tmp" init -q
+            git -C "$tmp" remote add origin "https://github.com/$repo.git"
+            git -C "$tmp" fetch -q --no-tags --depth=1 origin "$ref"
+            git -C "$tmp" rev-parse FETCH_HEAD
+            rm -rf "$tmp"
+          }
+          backend_sha="$(resolve BlinovDev/rc-setup-hub "$BACKEND_REF")"
+          frontend_sha="$(resolve BlinovDev/rc-setup-hub-fe "$FRONTEND_REF")"
+          echo "backend_sha=$backend_sha" >> "$GITHUB_OUTPUT"
+          echo "frontend_sha=$frontend_sha" >> "$GITHUB_OUTPUT"
+
+  validate-build:
+    needs: resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: BlinovDev/rc-setup-hub
+          ref: ${{ needs.resolve.outputs.backend_sha }}
+          path: backend-repo
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: BlinovDev/rc-setup-hub-fe
+          ref: ${{ needs.resolve.outputs.frontend_sha }}
+          path: frontend-repo
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend-repo/backend/go.mod
+          cache-dependency-path: backend-repo/backend/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend-repo/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend-repo/package-lock.json
+      - name: Validate backend
+        working-directory: backend-repo/backend
+        run: |
+          set -euo pipefail
+          go mod download
+          go mod verify
+          test -z "$(gofmt -l .)"
+          go test ./...
+          go build ./...
+          git diff --exit-code -- go.mod go.sum
+      - name: Validate frontend and API contract
+        working-directory: frontend-repo
+        run: |
+          set -euo pipefail
+          cmp api/openapi.yaml ../backend-repo/backend/api/openapi.yaml
+          npm ci
+          npm run api:generate
+          git diff --exit-code -- api/openapi.yaml src/api/generated/schema.ts
+          npm run format:check
+          npm run lint
+          npm run typecheck
+          npm test -- --run
+      - name: Build frontend
+        working-directory: frontend-repo
+        env:
+          VITE_API_URL: ${{ inputs.environment == 'production' && 'https://international-drift-hub.com' || 'https://staging.international-drift-hub.com' }}
+        run: npm run build
+      - name: Build Linux ARM64 backend and migrator
+        working-directory: backend-repo/backend
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/payload"
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o "$RUNNER_TEMP/payload/international-drift-hub" ./cmd/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o "$RUNNER_TEMP/payload/international-drift-hub-migrate" ./cmd/migrate
+          cp -a ../../frontend-repo/dist "$RUNNER_TEMP/payload/dist"
+      - name: Package release
+        run: |
+          python3 backend-repo/scripts/pack-release.py "${{ inputs.environment }}" "${{ needs.resolve.outputs.backend_sha }}" "${{ needs.resolve.outputs.frontend_sha }}" "$RUNNER_TEMP/payload" "$RUNNER_TEMP/release.tar"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ inputs.environment }}
+          path: ${{ runner.temp }}/release.tar
+          if-no-files-found: error
+          retention-days: 14
+
+  deploy:
+    needs: [resolve, validate-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-${{ inputs.environment }}
+          path: ${{ runner.temp }}/release
+      - name: Prepare SSH material
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/deploy_key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$RUNNER_TEMP/known_hosts"
+          test -s "$RUNNER_TEMP/deploy_key"
+          test -s "$RUNNER_TEMP/known_hosts"
+      - name: Upload, deploy and verify status
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_ENV: ${{ vars.DEPLOY_ENV }}
+          BACKEND_SHA: ${{ needs.resolve.outputs.backend_sha }}
+          FRONTEND_SHA: ${{ needs.resolve.outputs.frontend_sha }}
+        run: |
+          set -euo pipefail
+          test "$DEPLOY_ENV" = "${{ inputs.environment }}"
+          ssh_opts=(-T -p "$DEPLOY_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts" -i "$RUNNER_TEMP/deploy_key")
+          ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "upload $DEPLOY_ENV $BACKEND_SHA $FRONTEND_SHA" < "$RUNNER_TEMP/release/release.tar"
+          ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "deploy $DEPLOY_ENV $BACKEND_SHA $FRONTEND_SHA" < /dev/null
+          ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "status $DEPLOY_ENV" < /dev/null
+      - name: Remove SSH material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/deploy_key" "$RUNNER_TEMP/known_hosts"
