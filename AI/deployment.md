@@ -24,6 +24,15 @@ Backend and frontend SHAs are independent full 40-character Git commit IDs. A on
 
 The backend repository is the sole deployment coordinator. `.github/workflows/deploy.yml` is manually dispatched from trusted workflow code and resolves the two selected refs once before validation/build.
 
+“Use workflow from” selects the workflow revision; backend_ref/frontend_ref only
+select the application checkouts. An old workflow is not replaced by selecting a
+new backend ref. Validation runs on Ubuntu 24.04 and, when present, executes the
+selected backend's scripts/provision-photo-decoder.sh before Go tests. Backends
+predating photos skip that installation; provisioning errors stop validation.
+This provisions only the disposable Actions runner, not the deployment host.
+Existing failed runs retain their original workflow revision; start a new run
+from the corrected workflow after the appropriate deployment authorization.
+
 Production and staging bundles are different because the frontend embeds a different `VITE_API_URL` and the manifest records the environment. Do not promote the staging tar byte-for-byte to production.
 
 ## Validation

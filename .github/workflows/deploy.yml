@@ -57,7 +57,7 @@ jobs:
 
   validate-build:
     needs: resolve
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,6 +80,15 @@ jobs:
           node-version-file: frontend-repo/.nvmrc
           cache: npm
           cache-dependency-path: frontend-repo/package-lock.json
+      - name: Provision selected backend photo decoder
+        run: |
+          set -euo pipefail
+          decoder_script=./backend-repo/scripts/provision-photo-decoder.sh
+          if [[ -f "$decoder_script" ]]; then
+            sudo bash "$decoder_script"
+          else
+            echo "Selected backend predates photo decoder provisioning; no decoder installation required."
+          fi
       - name: Validate backend
         working-directory: backend-repo/backend
         run: |
