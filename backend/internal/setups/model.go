@@ -34,12 +34,46 @@ type Suspension struct {
 	Front *AxleSuspension `json:"front,omitempty"`
 	Rear  *AxleSuspension `json:"rear,omitempty"`
 }
-type AxleSuspension struct {
-	CamberDeg   *float64     `json:"camber_deg,omitempty"`
-	CasterDeg   *float64     `json:"caster_deg,omitempty"`
-	ToeDeg      *float64     `json:"toe_deg,omitempty"`
-	LinkLengths []LinkLength `json:"link_lengths,omitempty"`
+
+// ArmSpacing stores symmetric spacer totals ahead of and behind an arm, in mm.
+type ArmSpacing struct {
+	FrontMM *float64 `json:"front_mm,omitempty"`
+	RearMM  *float64 `json:"rear_mm,omitempty"`
 }
+type AxleSuspension struct {
+	TopArmSpacing   *ArmSpacing  `json:"top_arm_spacing,omitempty"`
+	LowerArmSpacing *ArmSpacing  `json:"lower_arm_spacing,omitempty"`
+	CamberDeg       *float64     `json:"camber_deg,omitempty"`
+	CasterDeg       *float64     `json:"caster_deg,omitempty"`
+	ToeDeg          *float64     `json:"toe_deg,omitempty"`
+	LinkLengths     []LinkLength `json:"link_lengths,omitempty"`
+}
+
+// UnmarshalJSON tracks explicit null blocks so normalization can omit their empty parents.
+// The alias retains strict unknown-field decoding, including nested spacing fields.
+func (a *AxleSuspension) UnmarshalJSON(raw []byte) error {
+	type axle AxleSuspension
+	var decoded axle
+	if err := decodeStrict(bytes.NewReader(raw), &decoded); err != nil {
+		return err
+	}
+	var presence struct {
+		Top   json.RawMessage `json:"top_arm_spacing"`
+		Lower json.RawMessage `json:"lower_arm_spacing"`
+	}
+	if err := json.Unmarshal(raw, &presence); err != nil {
+		return err
+	}
+	*a = AxleSuspension(decoded)
+	if bytes.Equal(bytes.TrimSpace(presence.Top), []byte("null")) {
+		a.TopArmSpacing = &ArmSpacing{}
+	}
+	if bytes.Equal(bytes.TrimSpace(presence.Lower), []byte("null")) {
+		a.LowerArmSpacing = &ArmSpacing{}
+	}
+	return nil
+}
+
 type LinkLength struct {
 	Name     string  `json:"name"`
 	LengthMM float64 `json:"length_mm"`
