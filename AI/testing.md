@@ -148,36 +148,13 @@ requires separate deployment authorization and a compatible explicit BE/FE SHA
 pair. Verify 0/5.2, all independent blocks, decimals/partial unknowns, reopen,
 unrelated edit, removal/clearing, negative/malformed errors and existing setups.
 
-## Setup photo regression gates (Issue #5)
+## Host deployment regression checks
 
-Photo store tests exercise content detection for JPEG/PNG/WebP/HEIC (real libheif
-HEVC fixture with provenance/license), conversion to JPEG, orientation via actual
-EXIF, metadata removal, resizing/no upscaling, corrupt/unsupported/empty/encoded
-limits, cancellation, safe keys, source/temp cleanup and aged orphan reconciliation.
-Startup verifies actual HEIC decode; an advertised HEIC coder without its decoder
-plugin is a failure, never a skip/pass. Full native tests run on ARM64 CI as well
-as amd64. Packages are pinned by scripts/provision-photo-decoder.sh.
-
-Real PostgreSQL tests cover migration 6, metadata/order/cover projections across
-detail/My/profile/search, idempotency conflicts/retries, concurrent uploads at
-nine/ten, cover deletion fallback, technical edit independence, setup cascade/file
-cleanup, failed filesystem cleanup/outbox retry, auth/owner/origin policy and
-public/private/friends thumbnail/full URLs including friendship revocation.
-TestPhotoBackupRestore uses actual pg_dump/pg_restore against two disposable
-PostgreSQL 17 containers and separate media directories; source deletion must not
-affect restored metadata/files. Transport tests validate non-null cover and
-gallery DTOs; the embedded OpenAPI/reference validator covers the new routes.
-
-Required checks: formatting, go mod download/verify, go test ./..., go test -race
-./..., go build ./..., unchanged modules; native ARM64 photo tests and CGO-disabled
-ARM64 build. Docker remains required for integration tests. No production DB or
-live server is used. -short omits DB suites and is not full validation.
-
-Remaining paired live QA after separate deployment authorization: legacy setup;
-one/ten/eleven images; cover/all-list reloads, remove cover/final, interrupted
-upload retry without duplicate setup/photos; iPhone HEIC and rotated actual
-photos; two-account visibility/direct full/thumbnail URLs and unfriend; technical
-edit independence, delete setup, persistence across releases/restarts and an
-isolated production-like backup/restore. 375px/desktop/gallery/focus and the
-monochrome bundled placeholder belong to frontend Issue #11. Native fixtures are
-not physical iPhone/device or live-server proof.
+Run `python3 -m unittest discover -s scripts/server -v` from repository root.
+Backend CI runs this alongside Go checks. It verifies staging media path rejection,
+runtime/sandbox preflight, preflight+backup ordering before migrations, fail-closed
+snapshot behavior, candidate journal redaction and unchanged production hook
+selection. Tests use temporary paths and mocks; they never access live environments.
+Host QA must additionally run the exact ARM64 candidate's `--check-media` under the
+staging sandbox, verify a coherent snapshot/isolated restore, deploy the explicitly
+approved SHA pair and verify public staging/backend health and unchanged production.

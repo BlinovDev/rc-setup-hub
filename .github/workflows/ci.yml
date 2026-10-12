@@ -24,8 +24,8 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
-      - name: Provision photo decoder
-        run: sudo ../scripts/provision-photo-decoder.sh
+      - name: Test host deployment safety helpers
+        run: python3 -m unittest discover -s ../scripts/server -v
       - run: go version
       - run: go mod download
       - run: go mod verify
