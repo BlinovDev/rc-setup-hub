@@ -25,7 +25,7 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
       - name: Provision photo decoder
-        run: sudo ./scripts/provision-photo-decoder.sh
+        run: sudo ../scripts/provision-photo-decoder.sh
       - run: go version
       - run: go mod download
       - run: go mod verify
@@ -49,7 +49,7 @@ jobs:
           cache-dependency-path: backend/go.sum
       - run: go mod download
       - name: Provision photo decoder
-        run: sudo ./scripts/provision-photo-decoder.sh
+        run: sudo ../scripts/provision-photo-decoder.sh
       - run: go test -race ./...
 
   photo-arm64:
@@ -63,6 +63,6 @@ jobs:
         with:
           go-version-file: backend/go.mod
       - name: Provision native ARM64 photo decoder
-        run: sudo ./scripts/provision-photo-decoder.sh
+        run: sudo ../scripts/provision-photo-decoder.sh
       - run: go test ./internal/photos
       - run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ./...

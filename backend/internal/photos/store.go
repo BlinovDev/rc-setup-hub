@@ -48,7 +48,7 @@ func New(root string) (*Store, error) {
 		return nil, err
 	}
 	info, err := os.Lstat(root)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0077 != 0 {
 		return nil, errors.New("invalid media directory")
 	}
 	s := &Store{root: root, slots: make(chan struct{}, 2)}
