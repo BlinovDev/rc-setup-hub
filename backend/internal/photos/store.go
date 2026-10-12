@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	_ "embed"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -48,8 +49,11 @@ func New(root string) (*Store, error) {
 		return nil, err
 	}
 	info, err := os.Lstat(root)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0077 != 0 {
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return nil, errors.New("invalid media directory")
+	}
+	if err := os.Chmod(root, 0700); err != nil {
+		return nil, err
 	}
 	s := &Store{root: root, slots: make(chan struct{}, 2)}
 	for name, target := range map[string]*string{"convert": &s.convert, "identify": &s.identify, "prlimit": &s.prlimit} {
@@ -96,11 +100,24 @@ func Format(raw []byte) (string, error) {
 		return "WEBP", nil
 	case len(raw) >= 16 && string(raw[4:8]) == "ftyp":
 		// Whitelist HEVC/HEIF still-image brands; AVIF is deliberately unsupported.
-		for i := 8; i+4 <= len(raw) && i < 64; i += 4 {
+		boxLength := int(binary.BigEndian.Uint32(raw[:4]))
+		if boxLength < 16 || boxLength > 4096 || boxLength > len(raw) {
+			return "", ErrImage
+		}
+		heif := false
+		for i := 8; i+4 <= boxLength; i += 4 {
+			if i == 12 {
+				continue
+			} // minor version is not a compatibility brand
 			switch string(raw[i : i+4]) {
+			case "avif", "avis":
+				return "", ErrImage
 			case "heic", "heix", "hevc", "hevx", "mif1":
-				return "HEIC", nil
+				heif = true
 			}
+		}
+		if heif {
+			return "HEIC", nil
 		}
 	}
 	return "", ErrImage

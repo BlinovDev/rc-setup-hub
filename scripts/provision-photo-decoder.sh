@@ -7,6 +7,7 @@ if [[ "$ID" != ubuntu || "$VERSION_ID" != 24.04 ]]; then
   exit 1
 fi
 apt-get update
+apt-cache policy imagemagick libheif1 libheif-plugin-libde265 libde265-0
 apt-get install -y --no-install-recommends \
   'imagemagick=8:6.9.12.98+dfsg1-5.2build2' \
   'libheif1=1.17.6-1ubuntu4.8' \
