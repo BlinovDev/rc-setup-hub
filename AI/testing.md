@@ -147,3 +147,14 @@ Paired frontend/live staging QA (including detail labels and 375px/desktop)
 requires separate deployment authorization and a compatible explicit BE/FE SHA
 pair. Verify 0/5.2, all independent blocks, decimals/partial unknowns, reopen,
 unrelated edit, removal/clearing, negative/malformed errors and existing setups.
+
+## Host deployment regression checks
+
+Run `python3 -m unittest discover -s scripts/server -v` from repository root.
+Backend CI runs this alongside Go checks. It verifies staging media path rejection,
+runtime/sandbox preflight, preflight+backup ordering before migrations, fail-closed
+snapshot behavior, candidate journal redaction and unchanged production hook
+selection. Tests use temporary paths and mocks; they never access live environments.
+Host QA must additionally run the exact ARM64 candidate's `--check-media` under the
+staging sandbox, verify a coherent snapshot/isolated restore, deploy the explicitly
+approved SHA pair and verify public staging/backend health and unchanged production.

@@ -100,3 +100,27 @@ After QA:
 5. require the workflow and server smoke checks to succeed.
 
 Do not deploy an unmerged feature SHA to production.
+
+## Staging photo startup incident and host gates
+
+The 2026-10-12 staging candidate for backend
+`3de11f118f34ad5ddc6059e24825ea047512a67f` and frontend
+`8839c4ce7401e67201cab7313dd548abaaa5b966` exited before listening because
+`MEDIA_DIR` was absent. Migration 6 had already applied; the prior release stayed
+active. The cleanup message about an unloaded candidate unit was secondary.
+The VPS also lacked ImageMagick and writable-media sandbox configuration.
+
+Administrator-managed host helper sources and staging-only photo prerequisites,
+coherent encrypted DB+media backups, diagnostics and recovery are now documented
+in [scripts/server/README.md](../scripts/server/README.md). Provision codecs from
+the **selected photo backend's** supported provisioning script; main revisions
+predating photos do not contain it. Actions provisioning never installs host
+packages. Keep production configuration/service/database/media untouched during
+staging work; this staging repair does not authorize or prepare production photos.
+
+Staging media is `/var/lib/international-drift-hub-staging/media`, runtime-owned
+0700, allowed explicitly under `ProtectSystem=strict`. The helper executes the
+packaged `--check-media` as `idh-staging` before migrations; candidate health still
+uses `127.0.0.1:18181`. Staging predeploy/daily snapshots now contain matching DB
+and media with decoder/schema/release metadata. Snapshot failure stops staging
+and leaves its mutation gate closed. Application/database rollback remains manual.
