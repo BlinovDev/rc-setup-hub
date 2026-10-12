@@ -137,3 +137,18 @@ are unsupported. Server stores processed images only in private persistent media
 The generated monochrome placeholder belongs only to frontend Issue #11, never
 the database or ten-photo count. Save a setup once before uploading against its
 ID; failed uploads retain that setup. Reuse a UUID request_id per file for retries.
+
+## Square thumbnail framing (setup-photo-ux-v2; Issue #10)
+
+New uploads have centered square JPEG thumbnails, min(short edge,640) pixels,
+without upscaling. Full photos keep their normalized natural aspect/dimensions
+and remain uncropped. Owners may adjust a thumbnail's square using integer x/y/size
+in server-normalized full-image pixels, or reset to center; this saves immediately,
+separately from setup fields. Cancel/skip in the future FE editor sends no mutation.
+Legacy photos remain unchanged until first adjustment and can be center-square
+presented by FE without re-upload/backfill. Crops persist across cover changes,
+reloads and every joined list projection. Revision checks prevent stale overwrites;
+failed applies retain the previous thumbnail. This explicitly supersedes the
+previous proportional-thumbnail/no-crop policy only for thumbnail framing, not
+full-photo editing. Existing photo limits, formats, privacy and cleanup remain.
+See AI/photo-ux-v2.md for the split roadmap and pending frontend/live QA gates.

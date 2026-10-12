@@ -147,3 +147,15 @@ Only JPEG/PNG/WebP/HEIC/HEIF; first still frame, orientation normalized, source
 metadata stripped, full 2400/thumbnail 640 without upscaling. No public static
 uploads, raw originals, arbitrary attachments or object-storage integration.
 The existing image-upload non-goal is superseded only for these setup photos.
+
+## D015 — Persist square thumbnail crops without editing full photos
+
+Accepted: Issue #10, setup-photo-ux-v2 stage 2. Supersedes proportional thumbnails/
+no-crop restriction for thumbnail framing only. Use typed integer coordinates on
+server-normalized full JPEG; centered defaults/reset, no upscaling. Persist nullable
+legacy crop and thumbnail revision, expose them in joined cover projections and
+version the thumbnail media query identity. Serialize owner apply/cover/delete
+through setup locks and atomically publish immutable thumbnail files before DB
+commit. Keep full and baseline thumbnail bytes; clean replaced versions through
+existing durable outbox/reconciliation. No destructive backfill, editor rotation,
+new codec dependency, permissions or storage service.

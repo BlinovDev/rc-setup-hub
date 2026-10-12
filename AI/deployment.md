@@ -124,3 +124,13 @@ packaged `--check-media` as `idh-staging` before migrations; candidate health st
 uses `127.0.0.1:18181`. Staging predeploy/daily snapshots now contain matching DB
 and media with decoder/schema/release metadata. Snapshot failure stops staging
 and leaves its mutation gate closed. Application/database rollback remains manual.
+
+### Crop version media (Issue #10)
+
+Migration 00007 introduces thumbnail-only version directories in the existing
+private MEDIA_DIR. The native decoder baseline and resource limits are unchanged.
+Coherent DB+media snapshots/restores must include both full/baseline directories and
+current/referenced thumbnail-only directories. Never infer media inventory solely
+from storage_key. Existing whole-directory snapshots include both; restore checks
+fail closed for missing referenced versions. Old versions go to the same durable
+cleanup outbox. No bulk rewrite, live server changes or deployment in this task.

@@ -167,3 +167,27 @@ ARM64 photo jobs must each run `sudo ../scripts/provision-photo-decoder.sh` from
 not provide `convert` to this runner. Keep Ubuntu 24.04 runner labels aligned with
 the supported pinned provisioning script; missing codecs must fail tests rather
 than skip photo coverage.
+
+## Square crop stage-2 checks (Issue #10)
+
+TestCropBounds covers integer/bounds/zero/negative/overflow and odd center offsets.
+TestSquareCropNormalizedSourceAndPublication covers portrait 3:4/9:16, square,
+landscape 4:3/16:9, tiny images, exact colored frame selection, no-upscaling,
+full SHA256 preservation, failed/cancelled generation and orphan/version sweeping.
+Existing real JPEG EXIF orientation and HEIC/PNG/WebP processing checks now require
+square default thumbnails based on normalized full dimensions.
+TestCropPersistenceRetriesRacesAndCleanup uses migrated PostgreSQL for defaults,
+legacy proportional media, reset/round-trip/all list projections, idempotent retries,
+stale edits, two-frame concurrency, generation/SQL publication failures, unchanged
+full bytes, cover/technical preservation and crop/deletion serialization/cleanup.
+Photo HTTP tests exercise strict/missing/null/fraction/overflow/string/unknown
+request rejection, 401/403/non-owner checks, retries/409 and current thumbnail
+privacy for private/friends/public/unfriend; backup restore includes a committed
+crop/version directory. OpenAPI validates the endpoint, typed request/response and
+all cover transports. Required full/race/native ARM64 CI and host safety tests remain.
+
+Local short tests alone do not verify PostgreSQL or pinned decoder provisioning.
+Use the exact CI result on the PR as evidence for those gates if local Docker/codecs
+are unavailable. No missing decoder test may be silently skipped. FE roadmap and
+320/375/390/768/1280 browser matrix, physical touch/iPhone HEIC and live two-account
+staging QA are pending linked Issue #13; no deployment is authorized by Issue #10.

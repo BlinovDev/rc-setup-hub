@@ -32,6 +32,7 @@ var ErrImage = errors.New("unsupported, corrupt or oversized image; use JPEG, PN
 var safeKey = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 type Image struct {
+	Crop                                           Crop
 	Key                                            string
 	Width, Height, ThumbnailWidth, ThumbnailHeight int
 }
@@ -171,13 +172,25 @@ func (s *Store) Process(ctx context.Context, raw []byte) (Image, error) {
 	if e1 != nil || e2 != nil || w < 1 || h < 1 || w > MaxPixels || h > MaxPixels || w*h > MaxPixels {
 		return Image{}, ErrImage
 	}
-	for _, output := range []struct{ name, size string }{{"full.jpg", "2400x2400>"}, {"thumbnail.jpg", "640x640>"}} {
+	for _, output := range []struct{ name, size string }{{"full.jpg", "2400x2400>"}} {
 		_, err = s.run(ctx, dir, s.convert, "-limit", "memory", "256MiB", "-limit", "map", "256MiB", "-limit", "disk", "512MiB", input, "-auto-orient", "-resize", output.size, "-background", "white", "-alpha", "remove", "-colorspace", "sRGB", "-strip", "-quality", "85", "JPEG:"+filepath.Join(dir, output.name))
 		if err != nil {
 			return Image{}, ErrImage
 		}
 	}
-	result := Image{}
+	fullFile, err := os.Open(filepath.Join(dir, "full.jpg"))
+	if err != nil {
+		return Image{}, err
+	}
+	fullConfig, _, err := image.DecodeConfig(fullFile)
+	_ = fullFile.Close()
+	if err != nil {
+		return Image{}, err
+	}
+	result, err := s.writeThumbnail(ctx, dir, filepath.Join(dir, "full.jpg"), CenterCrop(fullConfig.Width, fullConfig.Height))
+	if err != nil {
+		return Image{}, err
+	}
 	for i, name := range []string{"full.jpg", "thumbnail.jpg"} {
 		f, err := os.OpenFile(filepath.Join(dir, name), os.O_RDWR, 0600)
 		if err != nil {

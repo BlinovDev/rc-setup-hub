@@ -10,6 +10,7 @@ import (
 
 	"github.com/BlinovDev/rc-setup-hub/backend/api"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/friendships"
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/photos"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/setups"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
 	"github.com/pb33f/libopenapi"
@@ -34,6 +35,10 @@ func TestTransportContract(t *testing.T) {
 	profile := users.PublicProfile{ID: id, Nickname: "Driver"}
 	setup := setups.Setup{ID: id, OwnerID: id, Title: "Track setup", Visibility: setups.Private, SchemaVersion: 1, CreatedAt: now, UpdatedAt: now, Data: setups.DataV1{Suspension: &setups.Suspension{Front: &setups.AxleSuspension{ToeDeg: &zero, TopArmSpacing: &setups.ArmSpacing{FrontMM: &zero, RearMM: &spacing}, LowerArmSpacing: &setups.ArmSpacing{RearMM: &zero}}}}}
 	photo := &setups.Photo{ID: id, SetupID: id, Width: 100, Height: 50, ThumbnailWidth: 100, ThumbnailHeight: 50, ContentType: "image/jpeg", IsCover: true, CreatedAt: now, URL: "/api/v1/setups/" + id + "/photos/" + id + "/image", ThumbnailURL: "/api/v1/setups/" + id + "/photos/" + id + "/thumbnail"}
+	photo.Crop = &photos.Crop{X: 25, Y: 0, Size: 50}
+	photo.ThumbnailRevision = 1
+	photo.ThumbnailWidth = 50
+	photo.ThumbnailHeight = 50
 	setup.CoverPhoto = photo
 	historical := setup
 	historical.ChassisModelID = &id
@@ -70,6 +75,21 @@ func TestTransportContract(t *testing.T) {
 				t.Fatalf("response outside contract: %s: %+v", body, errs)
 			}
 		})
+	}
+	for _, body := range []string{`{"expected_revision":0,"crop":null}`, `{"expected_revision":1,"crop":{"x":0,"y":10,"size":20}}`} {
+		req := httptest.NewRequest("PUT", "/api/v1/setups/"+id+"/photos/"+id+"/crop", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "rc_session", Value: "contract-test-cookie"})
+		if valid, errs := validate.ValidateHttpRequest(req); !valid || len(errs) > 0 {
+			t.Fatalf("crop request: %+v", errs)
+		}
+		response := httptest.NewRecorder()
+		response.Header().Set("Content-Type", "application/json")
+		response.WriteHeader(200)
+		_ = json.NewEncoder(response).Encode(photo)
+		if valid, errs := validate.ValidateHttpResponse(req, response.Result()); !valid || len(errs) > 0 {
+			t.Fatalf("crop response: %+v", errs)
+		}
 	}
 	t.Run("created relationship", func(t *testing.T) {
 		response := httptest.NewRecorder()
