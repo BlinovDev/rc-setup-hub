@@ -158,3 +158,12 @@ selection. Tests use temporary paths and mocks; they never access live environme
 Host QA must additionally run the exact ARM64 candidate's `--check-media` under the
 staging sandbox, verify a coherent snapshot/isolated restore, deploy the explicitly
 approved SHA pair and verify public staging/backend health and unchanged production.
+
+### Photo decoder provisioning in every CI job
+
+Each GitHub Actions job has an isolated runner. The regular test, race and native
+ARM64 photo jobs must each run `sudo ../scripts/provision-photo-decoder.sh` from
+`backend/` before their Go tests. Installation in another job or on Hetzner does
+not provide `convert` to this runner. Keep Ubuntu 24.04 runner labels aligned with
+the supported pinned provisioning script; missing codecs must fail tests rather
+than skip photo coverage.

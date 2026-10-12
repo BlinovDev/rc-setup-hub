@@ -31,6 +31,8 @@ jobs:
       - run: go mod verify
       - name: Verify formatting
         run: test -z "$(gofmt -l .)"
+      - name: Provision photo decoder
+        run: sudo ../scripts/provision-photo-decoder.sh
       - run: go test ./...
       - run: go build ./...
       - name: Verify module files unchanged
