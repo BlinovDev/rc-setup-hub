@@ -194,3 +194,26 @@ independent of ALLOWED_ORIGINS. Successful Google login redirects to APP_URL;
 frontend requests send the backend HttpOnly session cookie with credentials.
 Frontend JavaScript never receives or stores Google tokens, backend auth tokens
 or session handles; the browser manages the HttpOnly cookie.
+
+## Arm spacing extension (arm-spacing-v1)
+
+`SetupDataV1.suspension.front/rear` each support optional `top_arm_spacing` and
+`lower_arm_spacing`, using reusable `ArmSpacing` with pointer-backed optional
+`front_mm` and `rear_mm`. The outer front/rear identifies the axle; inner
+front/rear means ahead of/behind the arm in vehicle direction. Values are total
+shim thickness in mm, symmetric left/right. Both blocks are independently
+optional on either axle. Example: `{"suspension":{"front":{"top_arm_spacing":
+{"front_mm":0,"rear_mm":5.2}}}}`.
+
+Numbers must be finite and >=0. JSON numeric strings, unknown fields, malformed
+values and negatives are rejected without writes. Zero remains zero, null or
+omission remains unknown; both unknown values omit the block and parents
+introduced solely for it. No rounding/defaults/calculations occur. PATCH still
+replaces supplied data in full; omit a block to remove it, omit/null one value
+to clear it while retaining its sibling. Omit top-level data for unrelated edits.
+Existing schema-v1 documents without spacing remain unchanged and need no defaults.
+
+Frontend Issue #9 in BlinovDev/rc-setup-hub-fe must copy the exact contract from
+this backend feature PR and regenerate transport types before paired QA. New
+frontend spacing writes require this backend; use an explicit compatible SHA pair.
+No merge/deploy is authorized by the implementation task.

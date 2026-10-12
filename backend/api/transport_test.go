@@ -30,8 +30,9 @@ func TestTransportContract(t *testing.T) {
 	id := "11111111-1111-4111-8111-111111111111"
 	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 	zero := 0.0
+	spacing := 5.2
 	profile := users.PublicProfile{ID: id, Nickname: "Driver"}
-	setup := setups.Setup{ID: id, OwnerID: id, Title: "Track setup", Visibility: setups.Private, SchemaVersion: 1, CreatedAt: now, UpdatedAt: now, Data: setups.DataV1{Suspension: &setups.Suspension{Front: &setups.AxleSuspension{ToeDeg: &zero}}}}
+	setup := setups.Setup{ID: id, OwnerID: id, Title: "Track setup", Visibility: setups.Private, SchemaVersion: 1, CreatedAt: now, UpdatedAt: now, Data: setups.DataV1{Suspension: &setups.Suspension{Front: &setups.AxleSuspension{ToeDeg: &zero, TopArmSpacing: &setups.ArmSpacing{FrontMM: &zero, RearMM: &spacing}, LowerArmSpacing: &setups.ArmSpacing{RearMM: &zero}}}}}
 	historical := setup
 	historical.ChassisModelID = &id
 	historical.Chassis = &setups.SearchChassis{ModelID: id, ModelName: "RD2.0", BrandID: id, BrandName: "Yokomo"}
@@ -87,6 +88,11 @@ func TestTransportContract(t *testing.T) {
 		{"POST", `{"title":"Track","visibility":"private","data":{}}`, true},
 		{"POST", `{"title":"Track","visibility":"private","schema_version":2,"data":{}}`, false},
 		{"POST", `{"title":"Track","visibility":"private","owner_id":"` + id + `","data":{}}`, false},
+		{"POST", `{"title":"Track","visibility":"private","data":{"suspension":{"front":{"top_arm_spacing":{"front_mm":0,"rear_mm":5.2}},"rear":{"lower_arm_spacing":{"front_mm":null,"rear_mm":0}}}}}`, true},
+		{"PATCH", `{"data":{"suspension":{"rear":{"top_arm_spacing":null,"lower_arm_spacing":{}}}}}`, true},
+		{"PATCH", `{"data":{"suspension":{"front":{"top_arm_spacing":{"front_mm":-0.1}}}}}`, false},
+		{"PATCH", `{"data":{"suspension":{"front":{"lower_arm_spacing":{"rear_mm":"5.2"}}}}}`, false},
+		{"PATCH", `{"data":{"suspension":{"rear":{"top_arm_spacing":{"unknown":1}}}}}`, false},
 		{"PATCH", `{}`, true}, {"PATCH", `{"title":"Changed"}`, true}, {"PATCH", `{"chassis_model_id":null,"notes":null}`, true},
 		{"PATCH", `{"data":{}}`, true}, {"PATCH", `{"data":null}`, false}, {"PATCH", `{"title":null}`, false}, {"PATCH", `{"visibility":null}`, false},
 		{"PATCH", `{"schema_version":2}`, false}, {"PATCH", `{"owner_id":"` + id + `"}`, false},

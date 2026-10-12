@@ -102,3 +102,15 @@ When a feature changes the API:
 4. frontend behavior and tests are updated.
 
 Do not make frontend and backend infer incompatible versions of a contract.
+
+## Optional arm spacer totals
+
+Each suspension axle independently supports optional top and lower arm spacing.
+Each block records total spacer thickness ahead of/behind the arm in vehicle
+direction (`front_mm`/`rear_mm`), in millimetres, symmetric across left/right.
+No block is required; no chassis defaults or shim calculations are applied.
+Finite nonnegative numbers preserve explicit zero and decimals without rounding.
+Omitted/null means unknown; either side can be known independently. Empty blocks
+and parents introduced solely for them are omitted. Removing a block uses full
+`data` replacement; unrelated edits retain all totals and other measurements.
+This is an additive schema-v1 extension with no backfill.

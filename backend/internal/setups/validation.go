@@ -37,8 +37,31 @@ func technical(value *string) error {
 func finite(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }
 func normalizeData(data *DataV1) error {
 	if data.Suspension != nil {
-		for _, axle := range []*AxleSuspension{data.Suspension.Front, data.Suspension.Rear} {
+		removedEmptySpacing := false
+		for _, axleSlot := range []**AxleSuspension{&data.Suspension.Front, &data.Suspension.Rear} {
+			axle := *axleSlot
 			if axle == nil {
+				continue
+			}
+			hadSpacing := axle.TopArmSpacing != nil || axle.LowerArmSpacing != nil
+			for _, spacing := range []**ArmSpacing{&axle.TopArmSpacing, &axle.LowerArmSpacing} {
+				if *spacing == nil {
+					continue
+				}
+				for _, value := range []*float64{(*spacing).FrontMM, (*spacing).RearMM} {
+					if value != nil && (!finite(*value) || *value < 0) {
+						return invalid("arm spacer totals must be finite numbers greater than or equal to zero")
+					}
+				}
+				if (*spacing).FrontMM == nil && (*spacing).RearMM == nil {
+					*spacing = nil
+				}
+			}
+			// Prune parents introduced solely by empty spacing blocks; leave legacy documents alone.
+			if hadSpacing && axle.TopArmSpacing == nil && axle.LowerArmSpacing == nil &&
+				axle.CamberDeg == nil && axle.CasterDeg == nil && axle.ToeDeg == nil && len(axle.LinkLengths) == 0 {
+				*axleSlot = nil
+				removedEmptySpacing = true
 				continue
 			}
 			for _, degree := range []*float64{axle.CamberDeg, axle.CasterDeg, axle.ToeDeg} {
@@ -56,6 +79,9 @@ func normalizeData(data *DataV1) error {
 					return invalid("link lengths require a name and length_mm greater than zero")
 				}
 			}
+		}
+		if removedEmptySpacing && data.Suspension.Front == nil && data.Suspension.Rear == nil {
+			data.Suspension = nil
 		}
 	}
 	if data.Shocks != nil {

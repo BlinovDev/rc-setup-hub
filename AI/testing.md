@@ -124,3 +124,26 @@ go test -race ./...
 ```
 
 Later add a `Makefile` or task runner only if it meaningfully simplifies repeatable commands.
+
+## Arm spacing regression coverage
+
+`TestArmSpacingNormalization`, `TestArmSpacingValidation` and
+`TestArmSpacingStrictDecode` cover legacy shapes, explicit zero, decimals, partial
+unknown values, null/empty blocks, parent pruning, all axle/arm/value positions,
+non-finite/negative values and strict unknown-field/numeric-string rejection.
+`TestArmSpacingHTTPPersistence` uses disposable migrated PostgreSQL through the
+existing dbtest helper: create/PATCH/detail/full lists and repository reads,
+actual JSONB 0/5.2, title-only preservation, removal/clearing, invalid writes,
+and legacy documents. API transport tests validate spacing DTOs and requests
+against the embedded OpenAPI; existing visibility/ownership tests remain required.
+
+Run Backend CI commands from backend/: `go mod download`, `go mod verify`,
+`test -z "$(gofmt -l .)"`, `go test ./...`, `go test -race ./...`,
+`go build ./...`, `git diff --exit-code -- go.mod go.sum`. Go version comes from
+go.mod; Docker must be running for real PostgreSQL. `-short` skips integration
+tests and is not evidence of complete backend validation.
+
+Paired frontend/live staging QA (including detail labels and 375px/desktop)
+requires separate deployment authorization and a compatible explicit BE/FE SHA
+pair. Verify 0/5.2, all independent blocks, decimals/partial unknowns, reopen,
+unrelated edit, removal/clearing, negative/malformed errors and existing setups.

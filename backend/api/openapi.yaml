@@ -865,6 +865,36 @@ components:
             $ref: '#/components/schemas/LinkLength'
           maxItems: 100
           description: Omitted/null/empty lists are omitted in responses.
+        top_arm_spacing:
+          anyOf:
+            - $ref: '#/components/schemas/ArmSpacing'
+            - type: "null"
+          description: Optional top arm spacer totals, symmetric across left/right.
+        lower_arm_spacing:
+          anyOf:
+            - $ref: '#/components/schemas/ArmSpacing'
+            - type: "null"
+          description: Optional lower arm spacer totals, symmetric across left/right.
+    ArmSpacing:
+      type: object
+      additionalProperties: false
+      description: Total spacer thickness ahead of and behind one arm relative to
+        vehicle direction, in millimetres. Either value may be unknown. Both
+        omitted/null values omit the block and parents introduced solely for it.
+        No defaults, rounding, shim calculator or left/right asymmetry. Available
+        independently for either arm on either axle. Explicit zero is preserved.
+      properties:
+        front_mm:
+          type: [number, "null"]
+          minimum: 0
+          description: Finite nonnegative total ahead of the arm; omitted/null means unknown.
+        rear_mm:
+          type: [number, "null"]
+          minimum: 0
+          description: Finite nonnegative total behind the arm; omitted/null means unknown.
+      examples:
+        - front_mm: 0
+          rear_mm: 5.2
     LinkLength:
       type: object
       additionalProperties: false

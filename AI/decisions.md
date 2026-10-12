@@ -120,3 +120,14 @@ The backend repository is the sole GitHub Actions coordinator for staging and pr
 Every deployment is a combined release identified by explicit backend and frontend commit SHAs and containing the Go server, migrator and environment-specific frontend build. One-sided features still select a compatible SHA from the unchanged repository.
 
 Staging and production are separate builds. Production deployment is manually dispatched in V1 and both submitted SHAs must be reachable from their respective `main` histories.
+
+## D013 — Optional symmetric arm spacer totals
+
+Status: accepted (Issue #3, arm-spacing-v1).
+
+Extend schema v1 additively with optional typed top/lower arm spacing on either
+axle. Record total front/rear spacer thickness in mm relative to vehicle
+direction, symmetric across left/right, using nullable pointer-backed finite
+nonnegative numbers. Preserve zero and precision; omit unknown/empty blocks.
+No mandatory blocks, chassis defaults, shim calculator, asymmetry or migration.
+The updated frontend requires the new backend contract and a compatible SHA pair.

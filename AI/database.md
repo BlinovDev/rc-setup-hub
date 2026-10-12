@@ -229,3 +229,15 @@ Use transactions for operations that must remain atomic, especially:
 - catalog changes with dependent validation if needed.
 
 Simple single-row setup CRUD does not need an explicit transaction unless it performs multiple dependent writes.
+
+## Arm spacing schema-v1 extension
+
+Optional typed `top_arm_spacing`/`lower_arm_spacing` objects on each suspension
+axle live inside the existing `setups.data` JSONB document. `front_mm`/`rear_mm`
+are finite nonnegative total spacer thicknesses in mm; pointer-backed zero is
+preserved, unknown values omitted, empty blocks normalized before writes.
+The existing repository marshals/unmarshals DataV1 and replaces the whole JSONB
+value on data PATCH. No SQL columns/indexes/constraints change, so no migration
+or backfill is needed; schema_version remains 1. Existing documents without
+spacing keep their shape. Real PostgreSQL HTTP/repository tests inspect JSONB
+zero/decimal persistence, removal, legacy edits and rejected writes.
