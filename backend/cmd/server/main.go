@@ -16,6 +16,7 @@ import (
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/config"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/database"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/friendships"
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/photos"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/setups"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/web"
@@ -31,6 +32,14 @@ func main() {
 			return attr
 		},
 	}))
+	if len(os.Args) == 2 && os.Args[1] == "--check-media" {
+		if _, err := photos.New(os.Getenv("MEDIA_DIR")); err != nil {
+			logger.Error("media prerequisite check failed", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("media prerequisite check passed")
+		return
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		logger.Error("configuration failed", "error", err)
@@ -64,6 +73,30 @@ func main() {
 	friendshipHandler := friendships.NewHandler(friendships.NewService(friendshipRepository))
 	userHandler := users.NewHandler(userService)
 	setupService := setups.NewService(setups.NewRepository(pool), catalog, friendshipRepository)
+	media, err := photos.New(os.Getenv("MEDIA_DIR"))
+	if err != nil {
+		logger.Error("photo storage initialization failed", "error", err)
+		os.Exit(1)
+	}
+	setupService.EnablePhotos(media)
+	if err := setupService.ReconcilePhotos(ctx); err != nil {
+		logger.Error("photo reconciliation failed", "error", err)
+		os.Exit(1)
+	}
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := setupService.ReconcilePhotos(ctx); err != nil {
+					logger.Error("photo cleanup failed", "error", err)
+				}
+			}
+		}
+	}()
 	setupHandler := setups.NewHandler(setupService)
 	authHandler.Register(router, catalogHandler.RegisterAPI, setupHandler.RegisterAPI, friendshipHandler.RegisterAPI, func(r chi.Router) { userHandler.RegisterAPI(r, auth.CurrentUser) })
 	adminHandler, err := admin.New(authConfig, admin.NewRepository(pool))

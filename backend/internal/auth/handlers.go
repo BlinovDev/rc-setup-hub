@@ -39,7 +39,7 @@ func (h *Handler) Register(r chi.Router, apiRoutes ...func(chi.Router)) {
 		// Empty allowlists must not use chi/cors' default wildcard behavior.
 		if len(h.origins) > 0 {
 			r.Use(cors.Handler(cors.Options{AllowedOrigins: h.origins,
-				AllowedMethods: []string{"GET", "PATCH", "POST", "DELETE", "OPTIONS"}, AllowedHeaders: []string{"Content-Type"}, AllowCredentials: true}))
+				AllowedMethods: []string{"GET", "PATCH", "POST", "PUT", "DELETE", "OPTIONS"}, AllowedHeaders: []string{"Content-Type"}, AllowCredentials: true}))
 		}
 		r.Use(h.RequireUser)
 		r.Use(h.checkOrigin)

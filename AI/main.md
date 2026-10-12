@@ -32,7 +32,7 @@ Do not add unless a new accepted decision explicitly requires them:
 - notifications;
 - teams/groups;
 - chat;
-- image uploads;
+- arbitrary attachments beyond optional setup photos (Issue #5);
 - normalized electronics catalog;
 - normalized shock/spring catalog;
 - arbitrary user-created chassis catalog entries;

@@ -217,3 +217,41 @@ Frontend Issue #9 in BlinovDev/rc-setup-hub-fe must copy the exact contract from
 this backend feature PR and regenerate transport types before paired QA. New
 frontend spacing writes require this backend; use an explicit compatible SHA pair.
 No merge/deploy is authorized by the implementation task.
+
+## Setup photo APIs (Issue #5)
+
+All routes use the existing credentialed cookie/session and mutation-origin
+checks. Multipart uploads have their own bounded parser; technical data remains
+strict 256 KiB JSON/full-replacement PATCH. Never include photos in technical data.
+
+- GET /api/v1/setups/{id}/photos: 200 SetupPhoto array, stable created_at/id order.
+- POST same path: owner-only multipart file + UUID request_id, exactly one file.
+  201 SetupPhoto. File maximum 25 MiB; whole multipart <=25 MiB+64 KiB. Accepted
+  JPEG/PNG/WebP/HEIC/HEIF are detected by content, never filename/MIME. First frame
+  becomes an oriented stripped JPEG with bounds 2400/640px. Maximum ten photos.
+  Same request_id and bytes returns the existing photo without duplicate writes;
+  different bytes or retry after deleting that photo returns 409. Receipts last
+  until setup deletion. Use a new UUID for an intentionally new upload.
+- PUT /api/v1/setups/{id}/photos/{photo_id}/cover: owner-only, no body, 200 SetupPhoto.
+- DELETE /api/v1/setups/{id}/photos/{photo_id}: owner-only, 204; cover fallback is
+  oldest remaining. File deletion failures retain a durable cleanup queue.
+- GET .../{photo_id}/image or /thumbnail: authenticated authorized processed JPEG,
+  Cache-Control: no-store, private; nosniff; no ETag/Last-Modified or 304 cache reuse.
+
+401 missing session; 403 untrusted mutation origin; 400 invalid UUID/multipart,
+unsupported/corrupt/oversized image or ten-photo limit; 404 missing/inaccessible
+setup/photo or non-owner mutation; 409 idempotency conflict; 503 upload capacity
+busy (two concurrent uploads per process); 500 processing/storage/DB failure,
+retry using the same request_id. Owner authorization precedes decoding; media
+visibility filters run before any file access and are rechecked before delivery.
+Prior downloads/in-flight authorized responses cannot be revoked retroactively.
+
+Setup and SetupSearchItem include cover_photo: SetupPhoto|null in the same joined
+query (including My setups and visible profile lists). Schema-v1 is unchanged.
+SetupPhoto exposes ID/setup ID, full/thumbnail dimensions, image/jpeg, is_cover,
+created_at and authenticated relative url/thumbnail_url. Generated storage keys
+and filesystem paths are never exposed. Gallery is a separate resource. Frontend
+Issue #11 must copy this backend feature PR's exact OpenAPI and regenerate types.
+Refresh gallery/detail/list/search cover state after immediate photo mutations.
+New frontend creation saves once, uploads against returned ID with per-file
+results/retry; never create a second setup due to image errors.

@@ -956,3 +956,14 @@ never included. Historical inactive catalog rows still display through the joine
 projection in details and lists; custom/unlisted setups have chassis:null.
 Active selection APIs and new-selection validation are unchanged. Setup lists
 use joins without N+1, and detail authorization still precedes protected decoding.
+
+## Photo runtime
+
+Normal server startup now requires MEDIA_DIR: a dedicated absolute private
+persistent directory, separate for staging/production and outside static/release
+roots. Provision the pinned Ubuntu 24.04 decoder with
+`sudo ../scripts/provision-photo-decoder.sh` on an explicitly authorized host.
+Run `MEDIA_DIR=/your/test/media ./server --check-media` as the runtime user to
+verify writeability and actual HEIC decode without database/OAuth configuration.
+See AI/deployment.md for permissions, native ARM64 gate, nginx limits and coherent
+DB+media backups. Do not start this release on an unprovisioned live host.
