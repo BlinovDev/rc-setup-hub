@@ -96,8 +96,8 @@ Do not deploy an unmerged feature SHA to production.
 
 This feature introduces a required host prerequisite. No live server was changed.
 Supported/pinned baseline: Ubuntu 24.04 amd64/arm64, ImageMagick
-8:6.9.12.98+dfsg1-5.2build2, libheif1/libheif-plugin-libde265 1.17.6-1ubuntu4.8,
-libde265-0 1.0.15-1ubuntu0.1. The HEVC plugin is required even if identify advertises
+8:6.9.12.98+dfsg1-5.2build2, libheif1/libheif-plugin-libde265 1.17.6-1ubuntu4.9,
+libde265-0 1.0.15-1ubuntu0.2. The HEVC plugin is required even if identify advertises
 HEIC. Run scripts/provision-photo-decoder.sh only after host-change authorization.
 It fails on a different OS or unavailable package version instead of guessing.
 Security/pin updates need review and rerun amd64/ARM64 gates. CI provisions these
