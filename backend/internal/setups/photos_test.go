@@ -3,6 +3,7 @@ package setups
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/png"
@@ -205,6 +206,50 @@ func TestPhotoHTTPAuthorizationAndRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := gallery[0]
+	cropPath := base + "/" + p.ID + "/crop"
+	cropBody := `{"expected_revision":1,"crop":{"x":0,"y":0,"size":5}}`
+	if w := request(router, "PUT", cropPath, cropBody, nil); w.Code != 401 {
+		t.Fatal("unauthenticated crop", w.Code)
+	}
+	foreign := httptest.NewRequest("PUT", cropPath, bytes.NewBufferString(cropBody))
+	foreign.AddCookie(cookie)
+	foreign.Header.Set("Content-Type", "application/json")
+	foreign.Header.Set("Origin", "https://evil.test")
+	denied := httptest.NewRecorder()
+	router.ServeHTTP(denied, foreign)
+	if denied.Code != 403 {
+		t.Fatal("crop origin", denied.Code)
+	}
+	for _, bad := range []string{
+		`null`, `{}`, `{"expected_revision":1}`, `{"expected_revision":null,"crop":null}`,
+		`{"expected_revision":1.2,"crop":null}`, `{"expected_revision":1,"crop":{"x":0,"y":0,"size":1.5}}`,
+		`{"expected_revision":1,"crop":{"x":0,"size":5}}`, `{"expected_revision":1,"crop":{"x":null,"y":0,"size":5}}`,
+		`{"expected_revision":1,"crop":{"x":"0","y":0,"size":5}}`, `{"expected_revision":1,"crop":{"x":0,"y":0,"size":5,"width":20}}`,
+		`{"expected_revision":1,"crop":{"x":9223372036854775808,"y":0,"size":5}}`,
+		`{"expected_revision":1,"crop":{"x":19,"y":0,"size":5}}`, `{"expected_revision":1,"crop":null,"reset":true}`,
+	} {
+		if w := request(router, "PUT", cropPath, bad, cookie); w.Code != 400 {
+			t.Fatal("invalid crop", bad, w.Code, w.Body)
+		}
+	}
+	w = request(router, "PUT", cropPath, cropBody, cookie)
+	if w.Code != 200 {
+		t.Fatal("crop", w.Code, w.Body)
+	}
+	var updated Photo
+	if err := json.Unmarshal(w.Body.Bytes(), &updated); err != nil || updated.ThumbnailRevision != 2 || updated.ThumbnailWidth != 5 || updated.Crop == nil {
+		t.Fatal("crop response", updated, err)
+	}
+	if w := request(router, "PUT", cropPath, cropBody, cookie); w.Code != 200 {
+		t.Fatal("crop retry", w.Code, w.Body)
+	}
+	if w := request(router, "PUT", cropPath, `{"expected_revision":1,"crop":null}`, cookie); w.Code != 409 {
+		t.Fatal("stale crop", w.Code, w.Body)
+	}
+	p, err = repo.visiblePhoto(ctx, setup.OwnerID, setup.ID, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, path := range []string{p.URL, p.ThumbnailURL} {
 		if w := request(router, "GET", path, "", nil); w.Code != 401 {
 			t.Fatal(w.Code)
@@ -224,6 +269,9 @@ func TestPhotoHTTPAuthorizationAndRetry(t *testing.T) {
 	}
 	provider.identity = users.Identity{Subject: "other", Email: "other@example.test", Name: "Other"}
 	otherCookie := login(t, router)
+	if w := request(router, "PUT", cropPath, `not JSON`, otherCookie); w.Code != 404 {
+		t.Fatal("foreign crop before parsing", w.Code)
+	}
 	var otherID string
 	if err := pool.QueryRow(ctx, `SELECT id::text FROM users WHERE google_subject='other'`).Scan(&otherID); err != nil {
 		t.Fatal(err)
@@ -295,7 +343,7 @@ func TestPhotoHTTPAuthorizationAndRetry(t *testing.T) {
 		t.Fatal("cleanup failure not reported")
 	}
 	var queued int
-	if err := pool.QueryRow(ctx, "SELECT count(*) FROM setup_photo_deletions").Scan(&queued); err != nil || queued != 1 {
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM setup_photo_deletions").Scan(&queued); err != nil || queued != 2 {
 		t.Fatal("cleanup lost queue", queued, err)
 	}
 	_ = os.Remove(root)
@@ -342,6 +390,11 @@ func TestPhotoBackupRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	revision := p.ThumbnailRevision
+	p, err = service.applyCrop(ctx, owner.ID, setup.ID, p.ID, CropInput{&revision, &photos.Crop{X: 0, Y: 0, Size: 5}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	dump, err := exec.CommandContext(ctx, "docker", "run", "--rm", "--network", "host", "postgres:17-alpine", "pg_dump", "--format=c", "--no-owner", "--no-acl", "-d", pool.Config().ConnConfig.ConnString()).Output()
 	if err != nil {
 		t.Fatal("backup", err)
@@ -369,17 +422,31 @@ func TestPhotoBackupRestore(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if err := os.Mkdir(filepath.Join(restoredRoot, p.thumbnailKey), 0700); err != nil {
+		t.Fatal(err)
+	}
+	cropped, err := os.ReadFile(filepath.Join(root, p.thumbnailKey, "thumbnail.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(restoredRoot, p.thumbnailKey, "thumbnail.jpg"), cropped, 0600); err != nil {
+		t.Fatal(err)
+	}
 	restored := NewService(NewRepository(restoredPool), chassis.NewService(chassis.NewRepository(restoredPool)), friendships.NewRepository(restoredPool))
 	restored.EnablePhotos(restoredStore)
 	if err := service.Delete(ctx, owner.ID, setup.ID); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := restored.Get(ctx, owner.ID, setup.ID)
-	if err != nil || loaded.CoverPhoto == nil || loaded.CoverPhoto.ID != p.ID {
+	if err != nil || loaded.CoverPhoto == nil || loaded.CoverPhoto.ID != p.ID || loaded.CoverPhoto.ThumbnailRevision != p.ThumbnailRevision || loaded.CoverPhoto.Crop == nil || *loaded.CoverPhoto.Crop != *p.Crop {
 		t.Fatal("restored metadata", loaded, err)
 	}
 	for _, thumb := range []bool{false, true} {
-		f, err := restoredStore.Open(p.key, thumb)
+		mediaKey := p.key
+		if thumb {
+			mediaKey = p.thumbnailKey
+		}
+		f, err := restoredStore.Open(mediaKey, thumb)
 		if err != nil {
 			t.Fatal("restored media", err)
 		}

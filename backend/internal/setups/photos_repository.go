@@ -2,7 +2,9 @@ package setups
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/photos"
@@ -10,34 +12,46 @@ import (
 )
 
 type Photo struct {
-	ID              string    `json:"id"`
-	SetupID         string    `json:"setup_id"`
-	Width           int       `json:"width"`
-	Height          int       `json:"height"`
-	ThumbnailWidth  int       `json:"thumbnail_width"`
-	ThumbnailHeight int       `json:"thumbnail_height"`
-	ContentType     string    `json:"content_type"`
-	IsCover         bool      `json:"is_cover"`
-	CreatedAt       time.Time `json:"created_at"`
-	URL             string    `json:"url"`
-	ThumbnailURL    string    `json:"thumbnail_url"`
-	key             string
+	Crop              *photos.Crop `json:"crop"`
+	ThumbnailRevision int          `json:"thumbnail_revision"`
+	thumbnailKey      string
+	ID                string    `json:"id"`
+	SetupID           string    `json:"setup_id"`
+	Width             int       `json:"width"`
+	Height            int       `json:"height"`
+	ThumbnailWidth    int       `json:"thumbnail_width"`
+	ThumbnailHeight   int       `json:"thumbnail_height"`
+	ContentType       string    `json:"content_type"`
+	IsCover           bool      `json:"is_cover"`
+	CreatedAt         time.Time `json:"created_at"`
+	URL               string    `json:"url"`
+	ThumbnailURL      string    `json:"thumbnail_url"`
+	key               string
 }
 
 func (p *Photo) urls() {
 	p.ContentType = "image/jpeg"
 	p.URL = "/api/v1/setups/" + p.SetupID + "/photos/" + p.ID + "/image"
-	p.ThumbnailURL = "/api/v1/setups/" + p.SetupID + "/photos/" + p.ID + "/thumbnail"
+	p.ThumbnailURL = "/api/v1/setups/" + p.SetupID + "/photos/" + p.ID + "/thumbnail?revision=" + strconv.Itoa(p.ThumbnailRevision)
 	p.CreatedAt = p.CreatedAt.UTC()
 }
 
-const photoColumns = `id::text,setup_id::text,storage_key,width,height,thumbnail_width,thumbnail_height,is_cover,created_at`
+const photoColumns = `id::text,setup_id::text,storage_key,width,height,thumbnail_width,thumbnail_height,is_cover,created_at,crop,thumbnail_revision,COALESCE(thumbnail_key,storage_key)`
 
 func scanPhoto(row pgx.Row) (Photo, error) {
 	var p Photo
-	err := row.Scan(&p.ID, &p.SetupID, &p.key, &p.Width, &p.Height, &p.ThumbnailWidth, &p.ThumbnailHeight, &p.IsCover, &p.CreatedAt)
+	var raw []byte
+	err := row.Scan(&p.ID, &p.SetupID, &p.key, &p.Width, &p.Height, &p.ThumbnailWidth, &p.ThumbnailHeight, &p.IsCover, &p.CreatedAt, &raw, &p.ThumbnailRevision, &p.thumbnailKey)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, ErrNotFound
+	}
+	if err != nil {
+		return p, err
+	}
+	if raw != nil {
+		if err = json.Unmarshal(raw, &p.Crop); err != nil {
+			return p, err
+		}
 	}
 	p.urls()
 	return p, err
@@ -97,7 +111,7 @@ func (r *Repository) addPhoto(ctx context.Context, ownerID, setupID, requestID, 
 	if count >= 10 {
 		return Photo{}, false, invalid("a setup may have at most 10 photos")
 	}
-	p, err := scanPhoto(tx.QueryRow(ctx, `INSERT INTO setup_photos(setup_id,storage_key,width,height,thumbnail_width,thumbnail_height,is_cover) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING `+photoColumns, setupID, img.Key, img.Width, img.Height, img.ThumbnailWidth, img.ThumbnailHeight, count == 0))
+	p, err := scanPhoto(tx.QueryRow(ctx, `INSERT INTO setup_photos(setup_id,storage_key,width,height,thumbnail_width,thumbnail_height,is_cover,crop,thumbnail_revision) VALUES($1,$2,$3,$4,$5,$6,$7,$8,1) RETURNING `+photoColumns, setupID, img.Key, img.Width, img.Height, img.ThumbnailWidth, img.ThumbnailHeight, count == 0, img.Crop))
 	if err != nil {
 		return Photo{}, false, err
 	}
@@ -145,7 +159,7 @@ func (r *Repository) photoAccess(ctx context.Context, callerID, setupID string) 
 	return err
 }
 func (r *Repository) visiblePhoto(ctx context.Context, callerID, setupID, photoID string) (Photo, error) {
-	return scanPhoto(r.pool.QueryRow(ctx, `SELECT p.id::text,p.setup_id::text,p.storage_key,p.width,p.height,p.thumbnail_width,p.thumbnail_height,p.is_cover,p.created_at FROM setup_photos p JOIN setups s ON s.id=p.setup_id WHERE s.id=$1 AND `+photoVisibility+` AND p.id=$3`, setupID, callerID, photoID))
+	return scanPhoto(r.pool.QueryRow(ctx, `SELECT p.id::text,p.setup_id::text,p.storage_key,p.width,p.height,p.thumbnail_width,p.thumbnail_height,p.is_cover,p.created_at,p.crop,p.thumbnail_revision,COALESCE(p.thumbnail_key,p.storage_key) FROM setup_photos p JOIN setups s ON s.id=p.setup_id WHERE s.id=$1 AND `+photoVisibility+` AND p.id=$3`, setupID, callerID, photoID))
 }
 func (r *Repository) mutatePhoto(ctx context.Context, ownerID, setupID, photoID string, remove bool) (Photo, error) {
 	tx, err := r.pool.Begin(ctx)
@@ -206,20 +220,25 @@ func (r *Repository) reconcilePhotos(ctx context.Context, store *photos.Store) e
 			return err
 		}
 	}
-	rows, err = r.pool.Query(ctx, `SELECT storage_key FROM setup_photos`)
+	rows, err = r.pool.Query(ctx, `SELECT storage_key,COALESCE(thumbnail_key,storage_key) FROM setup_photos`)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	known := map[string]bool{}
 	for rows.Next() {
-		var key string
-		if err := rows.Scan(&key); err != nil {
+		var key, thumbnailKey string
+		if err := rows.Scan(&key, &thumbnailKey); err != nil {
 			return err
 		}
 		known[key] = true
+		known[thumbnailKey] = true
 		for _, thumbnail := range []bool{false, true} {
-			file, err := store.Open(key, thumbnail)
+			mediaKey := key
+			if thumbnail {
+				mediaKey = thumbnailKey
+			}
+			file, err := store.Open(mediaKey, thumbnail)
 			if err != nil {
 				return errors.New("referenced photo file missing or unreadable; restore media before startup")
 			}

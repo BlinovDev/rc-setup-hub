@@ -195,7 +195,12 @@ func (h *Handler) photoImage(w http.ResponseWriter, r *http.Request) {
 		photoFailure(w, err)
 		return
 	}
-	f, err := h.service.photos.Open(p.key, chi.URLParam(r, "variant") == "thumbnail")
+	thumbnail := chi.URLParam(r, "variant") == "thumbnail"
+	mediaKey := p.key
+	if thumbnail {
+		mediaKey = p.thumbnailKey
+	}
+	f, err := h.service.photos.Open(mediaKey, thumbnail)
 	if err != nil {
 		failure(w, ErrNotFound)
 		return

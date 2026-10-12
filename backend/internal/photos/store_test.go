@@ -66,7 +66,7 @@ func TestFormatsAndProcessing(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if photo.Width > 2400 || photo.ThumbnailWidth > 640 {
+			if photo.Width > 2400 || photo.ThumbnailWidth > 640 || photo.ThumbnailWidth != photo.ThumbnailHeight || photo.Crop != CenterCrop(photo.Width, photo.Height) {
 				t.Fatal("bounds", photo)
 			}
 			for _, thumb := range []bool{false, true} {
@@ -136,8 +136,12 @@ func TestOrientationMetadataResizeAndSweep(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Width != 40 || p.Height != 80 || p.ThumbnailWidth != 40 || p.ThumbnailHeight != 80 {
+	if p.Width != 40 || p.Height != 80 || p.ThumbnailWidth != 40 || p.ThumbnailHeight != 40 {
 		t.Fatal("orientation/no-upscale", p)
+	}
+	normalizedCrop, err := s.CropThumbnail(context.Background(), p.Key, Crop{X: 0, Y: 40, Size: 40})
+	if err != nil || normalizedCrop.ThumbnailWidth != 40 || normalizedCrop.ThumbnailHeight != 40 {
+		t.Fatal("normalized oriented crop", normalizedCrop, err)
 	}
 	f, _ := s.Open(p.Key, false)
 	raw, _ := os.ReadFile(f.Name())
@@ -151,14 +155,14 @@ func TestOrientationMetadataResizeAndSweep(t *testing.T) {
 	}
 	raw, _ = os.ReadFile(input)
 	large, err := s.Process(context.Background(), raw)
-	if err != nil || large.Width != 2400 || large.ThumbnailWidth != 640 {
+	if err != nil || large.Width != 2400 || large.ThumbnailWidth != 640 || large.ThumbnailHeight != 640 {
 		t.Fatal("resize", large, err)
 	}
 	orphan := filepath.Join(s.root, "00000000000000000000000000000000")
 	_ = os.Mkdir(orphan, 0700)
 	past := time.Now().Add(-2 * time.Hour)
 	_ = os.Chtimes(orphan, past, past)
-	if err := s.Sweep(map[string]bool{p.Key: true, large.Key: true}); err != nil {
+	if err := s.Sweep(map[string]bool{p.Key: true, large.Key: true, normalizedCrop.Key: true}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(orphan); !os.IsNotExist(err) {

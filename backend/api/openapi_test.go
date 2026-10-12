@@ -57,6 +57,7 @@ func TestOpenAPIContract(t *testing.T) {
 		"/api/v1/setups": {"post"}, "/api/v1/setups/{id}": {"get", "patch", "delete"},
 		"/api/v1/setups/{id}/photos":                      {"get", "post"},
 		"/api/v1/setups/{id}/photos/{photo_id}":           {"delete"},
+		"/api/v1/setups/{id}/photos/{photo_id}/crop":      {"put"},
 		"/api/v1/setups/{id}/photos/{photo_id}/cover":     {"put"},
 		"/api/v1/setups/{id}/photos/{photo_id}/image":     {"get"},
 		"/api/v1/setups/{id}/photos/{photo_id}/thumbnail": {"get"},

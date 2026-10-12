@@ -255,3 +255,35 @@ Issue #11 must copy this backend feature PR's exact OpenAPI and regenerate types
 Refresh gallery/detail/list/search cover state after immediate photo mutations.
 New frontend creation saves once, uploads against returned ID with per-file
 results/retry; never create a second setup due to image errors.
+
+## Square crop contract (Issue #10; roadmap stage 2)
+
+PUT /api/v1/setups/{id}/photos/{photo_id}/crop is owner-only JSON with exactly
+expected_revision (integer 0..2147483647) and crop (null or {x,y,size}). All three
+crop fields are required integers: x/y >=0, size>0; x+size<=stored full width and
+y+size<=stored full height. Coordinates refer to the oriented/resized full JPEG,
+never original upload or client dimension claims. Null resets to size=min(w,h),
+x=floor((w-size)/2), y=floor((h-size)/2). Odd center offsets round down. Thumbnail
+uses ImageMagick crop/+repage then 640x640> JPEG quality 85, no upscaling; full bytes
+never change. FE preview uses the authorized full JPEG and these exact coordinates;
+allow JPEG/resampling differences, not a different source or coordinate frame.
+
+200 SetupPhoto includes nullable crop and thumbnail_revision in gallery, upload,
+cover/crop responses and all cover projections. Legacy crop=null/revision=0;
+new centered-square photos start at revision=1. thumbnail_url includes
+?revision=N as query identity; the endpoint always serves CURRENT authorized media,
+not historical versions. FE media keys must include photo ID + thumbnail_revision,
+invalidate loaded thumbnail blobs and list/detail/gallery cover state after apply.
+Full-photo blob identity does not change for crops; no metadata N+1 is needed.
+
+Apply requires the current revision. Identical current-revision requests are
+no-ops. One-step-old identical retries return the already committed photo safely;
+other stale revisions return 409 and require reload before explicit retry. There
+is no automatic retry. 400 malformed/missing/null coordinate, unknown field,
+fraction/string/overflow/out-of-bounds; 401 session; 403 mutation origin; 404 missing/
+not-owned/deleted; 500 processing/storage/DB failure; 503 shared processor busy.
+Owner checks precede parsing/processing. Crop/cover/delete share the parent setup
+lock through generation/commit; deletion cannot resurrect media. GET privacy and
+no-store rules remain in force regardless of revision query or known URLs.
+Frontend Issue #13 must copy the exact implementation PR-head contract and generate
+types. Record the compatible BE/FE pair on linked PRs when FE is implemented.

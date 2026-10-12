@@ -770,6 +770,61 @@ paths:
                 $ref: '#/components/schemas/APIError'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/v1/setups/{id}/photos/{photo_id}/crop:
+    put:
+      operationId: cropSetupPhoto
+      summary: Apply or reset a square thumbnail crop as owner
+      description: >-
+        Integer x/y/size use normalized full-image pixels after server orientation and
+        resize; top-left origin. Bounds are checked against stored full dimensions.
+        crop null resets to size=min(width,height), x=floor((width-size)/2),
+        y=floor((height-size)/2). Full JPEG is never modified. Thumbnail is square
+        min(size,640) pixels without upscaling. expected_revision must match the
+        current thumbnail_revision; stale conflicting writes return 409. An identical
+        immediate retry with expected_revision=current-1 returns the current photo,
+        as does an identical current-revision apply. No automatic mutation retry.
+        Crop/delete/cover are serialized; deleted/not-owned photos return 404.
+        Failures preserve the previous crop/thumbnail. Reload after 409.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      - name: photo_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhotoCropUpdate'
+      responses:
+        '200':
+          description: Current committed photo and thumbnail revision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupPhoto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          description: Processor busy; explicitly retry the same crop and expected_revision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
   /api/v1/setups/{id}/photos/{photo_id}/cover:
     put:
       operationId: chooseSetupCover
@@ -1229,10 +1284,39 @@ components:
           maxLength: 200
           description: Trimmed technical text without null bytes. Null, omitted or
             empty text is omitted in responses.
+    PhotoCrop:
+      type: object
+      additionalProperties: false
+      description: Integer square in normalized full JPEG pixels, independent of original orientation.
+      properties:
+        x: {type: integer, minimum: 0, maximum: 2399}
+        y: {type: integer, minimum: 0, maximum: 2399}
+        size: {type: integer, minimum: 1, maximum: 2400}
+      required: [x, y, size]
+    PhotoCropUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        expected_revision: {type: integer, minimum: 0, maximum: 2147483647}
+        crop:
+          oneOf:
+          - $ref: '#/components/schemas/PhotoCrop'
+          - type: 'null'
+      required: [expected_revision, crop]
     SetupPhoto:
       type: object
       additionalProperties: false
       properties:
+        crop:
+          description: Null on legacy photos; FE presents centered square until adjustment. New photos have a centered crop.
+          oneOf:
+          - $ref: '#/components/schemas/PhotoCrop'
+          - type: 'null'
+        thumbnail_revision:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          description: Zero for legacy thumbnails; starts at one for new square uploads. Use with photo ID in media query keys.
         id:
           type: string
           format: uuid
@@ -1268,8 +1352,10 @@ components:
           description: Authenticated full processed image path; never raw source
         thumbnail_url:
           type: string
-          description: Authenticated thumbnail path
+          description: Authenticated thumbnail path with revision query identity. Server always reads the current authorized thumbnail, not historical revisions.
       required:
+      - crop
+      - thumbnail_revision
       - id
       - setup_id
       - width

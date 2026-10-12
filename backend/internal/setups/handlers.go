@@ -20,6 +20,7 @@ func (h *Handler) RegisterAPI(r chi.Router) {
 		r.Get("/setups/{id}/photos", h.gallery)
 		r.Post("/setups/{id}/photos", h.upload)
 		r.Put("/setups/{id}/photos/{photo_id}/cover", h.coverPhoto)
+		r.Put("/setups/{id}/photos/{photo_id}/crop", h.cropPhoto)
 		r.Delete("/setups/{id}/photos/{photo_id}", h.deletePhoto)
 		r.Get("/setups/{id}/photos/{photo_id}/{variant:image|thumbnail}", h.photoImage)
 	}

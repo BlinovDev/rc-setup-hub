@@ -268,3 +268,25 @@ photo metadata. Private runtime-owned storage is outside release/static roots;
 restores must include consistent database AND media, not DB-only backups.
 Migration down drops photo metadata/receipts/outbox and is destructive; archive
 DB/media before any rollback. It does not delete filesystem files automatically.
+
+## Thumbnail crops (migration 00007)
+
+Adds nullable JSONB crop, INTEGER thumbnail_revision default 0, nullable safe
+thumbnail_key to setup_photos. Crop stores integer x/y/size with DB bounds checks
+against full dimensions. Old rows and media are backwards readable, with no backfill.
+New uploads persist center crop/revision 1; full/storage_key never changes.
+Adjusted thumbnails live in separate immutable random-key directories with only
+thumbnail.jpg; COALESCE(thumbnail_key,storage_key) resolves legacy/default media.
+All joined cover projections include crop/revision; internal keys stay private.
+
+Parent setup FOR UPDATE serializes crop/cover/delete and upload metadata. Crop
+holds it through bounded generation; file is fsynced/atomically published before
+metadata commit. Confirmed precommit failures clean new files; uncertain commits
+retain them, with identical retry/version checks and one-hour orphan reconciliation.
+UPDATE thumbnail_key queues superseded version directories; DELETE/cascade queues
+full and current thumbnail keys. Durable cleanup retries failures. Reconciliation
+checks referenced full/current thumbnail files and retains both directory types;
+missing referenced media fails startup. Legacy thumbnail.jpg is kept with full.jpg
+for compatibility/rollback. Down drops crop metadata, reverting to that baseline;
+archive coherent DB/media before rollback. Backup/restore must retain current version
+directories, not just full-image keys; no media relocation/new storage is introduced.
