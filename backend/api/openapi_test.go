@@ -55,7 +55,12 @@ func TestOpenAPIContract(t *testing.T) {
 		"/api/v1/friendships": {"get", "post"}, "/api/v1/friendships/{id}/accept": {"post"}, "/api/v1/friendships/{id}": {"delete"},
 		"/api/v1/chassis/brands": {"get"}, "/api/v1/chassis/brands/{brand_id}/models": {"get"},
 		"/api/v1/setups": {"post"}, "/api/v1/setups/{id}": {"get", "patch", "delete"},
-		"/api/v1/me/setups": {"get"}, "/api/v1/users/{user_id}/setups": {"get"}, "/api/v1/setups/search": {"get"},
+		"/api/v1/setups/{id}/photos":                      {"get", "post"},
+		"/api/v1/setups/{id}/photos/{photo_id}":           {"delete"},
+		"/api/v1/setups/{id}/photos/{photo_id}/cover":     {"put"},
+		"/api/v1/setups/{id}/photos/{photo_id}/image":     {"get"},
+		"/api/v1/setups/{id}/photos/{photo_id}/thumbnail": {"get"},
+		"/api/v1/me/setups":                               {"get"}, "/api/v1/users/{user_id}/setups": {"get"}, "/api/v1/setups/search": {"get"},
 	} {
 		for _, method := range methods {
 			op, exists := contract.Paths[path][method]
@@ -70,7 +75,7 @@ func TestOpenAPIContract(t *testing.T) {
 			}
 		}
 	}
-	for _, name := range []string{"User", "PublicProfile", "ChassisBrand", "ChassisModel", "Setup", "SetupDataV1", "Suspension", "AxleSuspension", "LinkLength", "Shocks", "Shock", "Spring", "Electronics", "SetupSearchItem", "SetupSearchChassis", "SetupSearchPage", "FriendshipRelationship", "FriendshipItem", "FriendshipList", "APIError"} {
+	for _, name := range []string{"SetupPhoto", "User", "PublicProfile", "ChassisBrand", "ChassisModel", "Setup", "SetupDataV1", "Suspension", "AxleSuspension", "LinkLength", "Shocks", "Shock", "Spring", "Electronics", "SetupSearchItem", "SetupSearchChassis", "SetupSearchPage", "FriendshipRelationship", "FriendshipItem", "FriendshipList", "APIError"} {
 		if _, exists := contract.Components.Schemas[name]; !exists {
 			t.Errorf("missing schema %s", name)
 		}

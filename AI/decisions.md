@@ -131,3 +131,19 @@ direction, symmetric across left/right, using nullable pointer-backed finite
 nonnegative numbers. Preserve zero and precision; omit unknown/empty blocks.
 No mandatory blocks, chassis defaults, shim calculator, asymmetry or migration.
 The updated frontend requires the new backend contract and a compatible SHA pair.
+
+## D014 — Private setup photos outside technical JSONB
+
+Status: accepted (Issue #5, setup-photos-v1).
+
+Allow 0–10 optional setup photos, owner writes and current authenticated setup
+visibility on every gallery/full/thumbnail read. One deterministic cover, stable
+order, no captions/sorting. Store processed JPEGs on private persistent server
+storage, metadata/receipts/deletion outbox in PostgreSQL, per-setup locks and
+deferred cover/count constraints. Explicit retry UUIDs prevent duplicate uploads.
+Use pinned Ubuntu 24.04 ImageMagick/libheif/libde265 executables without CGO,
+bounded process resources/time/concurrency and actual HEIC startup self-test.
+Only JPEG/PNG/WebP/HEIC/HEIF; first still frame, orientation normalized, source
+metadata stripped, full 2400/thumbnail 640 without upscaling. No public static
+uploads, raw originals, arbitrary attachments or object-storage integration.
+The existing image-upload non-goal is superseded only for these setup photos.

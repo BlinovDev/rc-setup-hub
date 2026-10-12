@@ -3,6 +3,7 @@ package setups
 import (
 	"context"
 	"errors"
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/photos"
 
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/chassis"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/friendships"
@@ -10,9 +11,11 @@ import (
 )
 
 type Service struct {
-	repo    *Repository
-	catalog *chassis.Service
-	friends *friendships.Repository
+	uploadSlots chan struct{}
+	photos      *photos.Store
+	repo        *Repository
+	catalog     *chassis.Service
+	friends     *friendships.Repository
 }
 
 func NewService(repo *Repository, catalog *chassis.Service, friends *friendships.Repository) *Service {
@@ -98,7 +101,13 @@ func (s *Service) Delete(ctx context.Context, ownerID, id string) error {
 	if err := validID(id); err != nil {
 		return err
 	}
-	return s.repo.DeleteOwned(ctx, ownerID, id)
+	if err := s.repo.DeleteOwned(ctx, ownerID, id); err != nil {
+		return err
+	}
+	if s.photos != nil {
+		_ = s.ReconcilePhotos(ctx)
+	}
+	return nil
 }
 func sameChassis(a, b *string) bool {
 	if a == nil || b == nil {

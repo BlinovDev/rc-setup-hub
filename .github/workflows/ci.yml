@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: backend
@@ -31,13 +31,15 @@ jobs:
       - run: go mod verify
       - name: Verify formatting
         run: test -z "$(gofmt -l .)"
+      - name: Provision photo decoder
+        run: sudo ../scripts/provision-photo-decoder.sh
       - run: go test ./...
       - run: go build ./...
       - name: Verify module files unchanged
         run: git diff --exit-code -- go.mod go.sum
 
   race:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: backend
@@ -48,4 +50,21 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
       - run: go mod download
+      - name: Provision photo decoder
+        run: sudo ../scripts/provision-photo-decoder.sh
       - run: go test -race ./...
+
+  photo-arm64:
+    runs-on: ubuntu-24.04-arm
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+      - name: Provision native ARM64 photo decoder
+        run: sudo ../scripts/provision-photo-decoder.sh
+      - run: go test ./internal/photos
+      - run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ./...

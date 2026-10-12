@@ -33,16 +33,19 @@ func TestTransportContract(t *testing.T) {
 	spacing := 5.2
 	profile := users.PublicProfile{ID: id, Nickname: "Driver"}
 	setup := setups.Setup{ID: id, OwnerID: id, Title: "Track setup", Visibility: setups.Private, SchemaVersion: 1, CreatedAt: now, UpdatedAt: now, Data: setups.DataV1{Suspension: &setups.Suspension{Front: &setups.AxleSuspension{ToeDeg: &zero, TopArmSpacing: &setups.ArmSpacing{FrontMM: &zero, RearMM: &spacing}, LowerArmSpacing: &setups.ArmSpacing{RearMM: &zero}}}}}
+	photo := &setups.Photo{ID: id, SetupID: id, Width: 100, Height: 50, ThumbnailWidth: 100, ThumbnailHeight: 50, ContentType: "image/jpeg", IsCover: true, CreatedAt: now, URL: "/api/v1/setups/" + id + "/photos/" + id + "/image", ThumbnailURL: "/api/v1/setups/" + id + "/photos/" + id + "/thumbnail"}
+	setup.CoverPhoto = photo
 	historical := setup
 	historical.ChassisModelID = &id
 	historical.Chassis = &setups.SearchChassis{ModelID: id, ModelName: "RD2.0", BrandID: id, BrandName: "Yokomo"}
 	relationship := friendships.Relationship{ID: id, RequesterID: id, AddresseeID: "22222222-2222-4222-8222-222222222222", Status: friendships.Pending, CreatedAt: now, UpdatedAt: now}
 	item := friendships.Item{ID: id, User: profile, CreatedAt: now, UpdatedAt: now}
-	summary := setups.SearchItem{ID: id, Title: "Public setup", Visibility: setups.Public, SchemaVersion: 1, CreatedAt: now, UpdatedAt: now, Owner: profile}
+	summary := setups.SearchItem{CoverPhoto: photo, ID: id, Title: "Public setup", Visibility: setups.Public, SchemaVersion: 1, CreatedAt: now, UpdatedAt: now, Owner: profile}
 	for _, tc := range []struct {
 		path  string
 		value any
 	}{
+		{"/api/v1/setups/" + id + "/photos", []setups.Photo{*photo}},
 		{"/api/v1/me", users.User{ID: id, Email: "driver@example.com", Nickname: "Driver", CreatedAt: now}},
 		{"/api/v1/users/search", []users.PublicProfile{profile}},
 		{"/api/v1/users/" + id, profile},

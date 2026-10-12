@@ -241,3 +241,30 @@ value on data PATCH. No SQL columns/indexes/constraints change, so no migration
 or backfill is needed; schema_version remains 1. Existing documents without
 spacing keep their shape. Real PostgreSQL HTTP/repository tests inspect JSONB
 zero/decimal persistence, removal, legacy edits and rejected writes.
+
+## Setup photos (migration 00006)
+
+setup_photos stores UUID id/setup FK ON DELETE CASCADE, random generated storage
+key, full/thumbnail dimensions, is_cover and created_at. No bytes in PostgreSQL;
+no photos in technical JSONB. Cover has a partial unique index and deferred
+constraint trigger requiring exactly one for nonempty galleries and <=10 photos.
+Every owner photo write first locks the parent setup FOR UPDATE; count checking
+and cover/fallback changes are serialized even for concurrent ninth/tenth uploads.
+Stable order is created_at,id. Cover joins use the unique partial cover index.
+
+setup_photo_uploads holds setup-scoped UUID request_id, source SHA-256 and photo
+FK ON DELETE SET NULL. Same bytes/key reuse the existing record; changed bytes or
+a tombstoned deleted photo conflicts. Receipts cascade only with setup deletion.
+setup_photo_deletions is a durable outbox populated by an AFTER DELETE trigger,
+including setup cascades. Successful cleanup removes the outbox row; failure or
+restart retains it for retry. Full/thumbnail publication is an atomic directory
+rename before the metadata transaction. Commit-outcome uncertainty retains files;
+retry reads the receipt. Unreferenced publication/temp directories older than one
+hour are reconciled; never sweep unless the DB inventory query succeeded.
+
+Normal startup reconciles before accepting requests; a one-minute worker and
+delete paths retry cleanup. Storage failures never silently create usable-looking
+photo metadata. Private runtime-owned storage is outside release/static roots;
+restores must include consistent database AND media, not DB-only backups.
+Migration down drops photo metadata/receipts/outbox and is destructive; archive
+DB/media before any rollback. It does not delete filesystem files automatically.

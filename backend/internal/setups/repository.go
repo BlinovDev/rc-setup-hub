@@ -19,16 +19,16 @@ func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: po
 // Both reads and mutation results use the same read-only historical projection.
 // No activation filter is used here; is_active only controls new selection.
 const displayColumns = `s.id::text,s.owner_id::text,s.chassis_model_id::text,s.title,s.visibility,s.data,s.notes,s.schema_version,s.created_at,s.updated_at,
- m.id::text,m.name,b.id::text,b.name`
-const displayJoins = ` LEFT JOIN chassis_models m ON m.id=s.chassis_model_id LEFT JOIN chassis_brands b ON b.id=m.brand_id`
+ m.id::text,m.name,b.id::text,b.name, CASE WHEN cp.id IS NULL THEN NULL ELSE jsonb_build_object('id',cp.id,'setup_id',cp.setup_id,'width',cp.width,'height',cp.height,'thumbnail_width',cp.thumbnail_width,'thumbnail_height',cp.thumbnail_height,'is_cover',cp.is_cover,'created_at',cp.created_at,'content_type','image/jpeg','url','/api/v1/setups/'||cp.setup_id||'/photos/'||cp.id||'/image','thumbnail_url','/api/v1/setups/'||cp.setup_id||'/photos/'||cp.id||'/thumbnail') END`
+const displayJoins = ` LEFT JOIN chassis_models m ON m.id=s.chassis_model_id LEFT JOIN chassis_brands b ON b.id=m.brand_id LEFT JOIN setup_photos cp ON cp.setup_id=s.id AND cp.is_cover`
 
 const columns = `id,owner_id,chassis_model_id,title,visibility,data,notes,schema_version,created_at,updated_at`
 
 func scan(row pgx.Row) (Setup, error) {
 	var s Setup
-	var raw []byte
+	var raw, cover []byte
 	var modelID, modelName, brandID, brandName *string
-	err := row.Scan(&s.ID, &s.OwnerID, &s.ChassisModelID, &s.Title, &s.Visibility, &raw, &s.Notes, &s.SchemaVersion, &s.CreatedAt, &s.UpdatedAt, &modelID, &modelName, &brandID, &brandName)
+	err := row.Scan(&s.ID, &s.OwnerID, &s.ChassisModelID, &s.Title, &s.Visibility, &raw, &s.Notes, &s.SchemaVersion, &s.CreatedAt, &s.UpdatedAt, &modelID, &modelName, &brandID, &brandName, &cover)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Setup{}, ErrNotFound
 	}
@@ -51,6 +51,11 @@ func scan(row pgx.Row) (Setup, error) {
 			return Setup{}, errors.New("incomplete historical chassis")
 		}
 		s.Chassis = &SearchChassis{ModelID: *modelID, ModelName: *modelName, BrandID: *brandID, BrandName: *brandName}
+	}
+	if cover != nil {
+		if err := json.Unmarshal(cover, &s.CoverPhoto); err != nil {
+			return Setup{}, err
+		}
 	}
 	s.CreatedAt = s.CreatedAt.UTC()
 	s.UpdatedAt = s.UpdatedAt.UTC()

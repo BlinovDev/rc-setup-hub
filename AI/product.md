@@ -82,7 +82,7 @@ Admin authorization comes from the configured email allowlist, not a database ro
 Do not add by assumption:
 - comments, likes, ratings or favorites;
 - chat or notifications;
-- image uploads;
+- arbitrary attachments beyond the approved optional setup photos;
 - setup version history;
 - teams/groups;
 - multiple RC disciplines;
@@ -114,3 +114,26 @@ Omitted/null means unknown; either side can be known independently. Empty blocks
 and parents introduced solely for them are omitted. Removing a block uses full
 `data` replacement; unrelated edits retain all totals and other measurements.
 This is an additive schema-v1 extension with no backfill.
+
+## Setup photos (setup-photos-v1; Issue #5)
+
+Setups optionally have 0–10 photos, separate from schema-v1 technical data. Only
+the owner uploads, chooses a cover or deletes. The first successful upload is
+cover; choosing another replaces it; deleting cover selects the oldest remaining
+photo by creation timestamp/UUID. Zero photos means no cover. Stable upload order,
+no captions/manual sorting. Existing text/technical edits never change photos.
+
+Authenticated image/thumbnail/gallery reads inherit current setup visibility;
+public still requires login. Friendship removal/private visibility revokes later
+reads of known URLs. No-store responses prevent browser/shared cache reuse;
+already downloaded copies cannot be revoked. Full and all list/search responses
+include nullable joined cover metadata, without per-item metadata requests.
+
+JPEG/JPG, PNG, WebP and HEVC HEIC/HEIF still images are accepted by content.
+25 MiB/50 megapixel limit; first frame/image only for multi-image input, oriented
+and re-encoded metadata-free JPEG, <=2400px full/640px thumbnail without upscaling.
+Transparency is flattened on white. GIF/AVIF/BMP/TIFF/SVG/video/other attachments
+are unsupported. Server stores processed images only in private persistent media.
+The generated monochrome placeholder belongs only to frontend Issue #11, never
+the database or ten-photo count. Save a setup once before uploading against its
+ID; failed uploads retain that setup. Reuse a UUID request_id per file for retries.

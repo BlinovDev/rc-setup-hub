@@ -685,6 +685,227 @@ paths:
               schema:
                 type: string
       security: []
+  /api/v1/setups/{id}/photos:
+    get:
+      operationId: listSetupPhotos
+      summary: List authorized gallery in upload order
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SetupPhoto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: uploadSetupPhoto
+      summary: Upload one photo as the owner
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      description: Use one UUID request_id per selected file and reuse it for retries. Same bytes
+        return the same photo; changed bytes or a deleted photo return 409. 25 MiB file plus 64
+        KiB multipart overhead, 50 megapixels. JPEG/PNG/WebP/HEIC/HEIF content only. First frame
+        becomes stripped oriented resized JPEG; first photo is cover. Setup must already exist.
+        Maximum ten photos. Owner is checked before decoding. Busy uploads return 503; write failures are retryable 500.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                request_id:
+                  type: string
+                  format: uuid
+                file:
+                  type: string
+                  format: binary
+              required:
+              - request_id
+              - file
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupPhoto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: Upload capacity busy; retry the same request_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/setups/{id}/photos/{photo_id}/cover:
+    put:
+      operationId: chooseSetupCover
+      summary: Choose cover as owner; no body
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: photo_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupPhoto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/setups/{id}/photos/{photo_id}:
+    delete:
+      operationId: deleteSetupPhoto
+      summary: Delete as owner; cover falls back to oldest remaining photo
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: photo_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '204':
+          description: Deleted; cleanup queued durably if filesystem removal fails
+  /api/v1/setups/{id}/photos/{photo_id}/image:
+    get:
+      operationId: readSetupPhotoImage
+      summary: Read authorized processed JPEG
+      description: Checks current session and setup visibility on every read. No public static
+        media. Cache-Control no-store, private; no ETag/Last-Modified. Lost access and unknown
+        photo are identical 404.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: photo_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: JPEG bytes; no-store, private
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/setups/{id}/photos/{photo_id}/thumbnail:
+    get:
+      operationId: readSetupPhotoThumbnail
+      summary: Read authorized processed JPEG
+      description: Checks current session and setup visibility on every read. No public static
+        media. Cache-Control no-store, private; no ETag/Last-Modified. Lost access and unknown
+        photo are identical 404.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: photo_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: JPEG bytes; no-store, private
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
     CookieAuth:
@@ -1008,10 +1229,67 @@ components:
           maxLength: 200
           description: Trimmed technical text without null bytes. Null, omitted or
             empty text is omitted in responses.
+    SetupPhoto:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        setup_id:
+          type: string
+          format: uuid
+        width:
+          type: integer
+          minimum: 1
+          maximum: 2400
+        height:
+          type: integer
+          minimum: 1
+          maximum: 2400
+        thumbnail_width:
+          type: integer
+          minimum: 1
+          maximum: 640
+        thumbnail_height:
+          type: integer
+          minimum: 1
+          maximum: 640
+        content_type:
+          type: string
+          const: image/jpeg
+        is_cover:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        url:
+          type: string
+          description: Authenticated full processed image path; never raw source
+        thumbnail_url:
+          type: string
+          description: Authenticated thumbnail path
+      required:
+      - id
+      - setup_id
+      - width
+      - height
+      - thumbnail_width
+      - thumbnail_height
+      - content_type
+      - is_cover
+      - created_at
+      - url
+      - thumbnail_url
     Setup:
       type: object
       additionalProperties: false
       properties:
+        cover_photo:
+          anyOf:
+            - $ref: '#/components/schemas/SetupPhoto'
+            - type: "null"
+          description: Compact joined cover metadata; null when there are no photos.
         id:
           type: string
           format: uuid
@@ -1061,6 +1339,7 @@ components:
           type: string
           format: date-time
       required:
+        - cover_photo
         - id
         - owner_id
         - chassis
@@ -1187,6 +1466,11 @@ components:
       type: object
       additionalProperties: false
       properties:
+        cover_photo:
+          anyOf:
+            - $ref: '#/components/schemas/SetupPhoto'
+            - type: "null"
+          description: Compact joined cover metadata; null when there are no photos.
         id:
           type: string
           format: uuid
@@ -1222,6 +1506,7 @@ components:
             - $ref: '#/components/schemas/SetupSearchChassis'
             - type: "null"
       required:
+        - cover_photo
         - id
         - title
         - chassis_model_id

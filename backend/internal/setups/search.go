@@ -20,6 +20,7 @@ type SearchInput struct {
 
 // SearchItem is a browse summary; complete technical data remains on the detail endpoint.
 type SearchItem struct {
+	CoverPhoto     *Photo              `json:"cover_photo"`
 	ID             string              `json:"id"`
 	Title          string              `json:"title"`
 	Visibility     Visibility          `json:"visibility"`

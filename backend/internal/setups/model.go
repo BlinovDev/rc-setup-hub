@@ -100,6 +100,7 @@ type Electronics struct {
 	Radio string `json:"radio,omitempty"`
 }
 type Setup struct {
+	CoverPhoto     *Photo         `json:"cover_photo"`
 	ID             string         `json:"id"`
 	OwnerID        string         `json:"owner_id"`
 	ChassisModelID *string        `json:"chassis_model_id"`
