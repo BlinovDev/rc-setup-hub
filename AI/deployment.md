@@ -134,3 +134,29 @@ current/referenced thumbnail-only directories. Never infer media inventory solel
 from storage_key. Existing whole-directory snapshots include both; restore checks
 fail closed for missing referenced versions. Old versions go to the same durable
 cleanup outbox. No bulk rewrite, live server changes or deployment in this task.
+
+## Production photo host readiness (2026-10-15)
+
+Production needs its own prerequisites even when staging is already ready.
+The failed photo candidate exited with missing `MEDIA_DIR`; migrations 6 and 7
+were already applied, so readiness work must not roll back or recreate the DB.
+
+The controller now selects separate `production_media` and `staging_media` hooks.
+Production uses `/var/lib/international-drift-hub/media`, runtime identity
+`international-drift-hub`, its own protected environment/encryption key, existing
+production Compose database, and `/var/backups/international-drift-hub` snapshots.
+Its strict systemd sandbox grants only this media path write access. The actual
+candidate's `--check-media` runs as the production runtime user before backup or
+migration. The verified-main SHA gate still runs first and is unchanged.
+
+Production nginx uses the same documented 26m API upload limit/120s read timeout,
+a separate private body-temp directory and `/run/rc-hub-production-maintenance`
+gate. Predeploy and existing daily backup jobs use coherent encrypted DB+media
+snapshots with the production lock, seven daily sets and 30-day predeploy retention.
+A snapshot pauses only production API/auth/admin traffic and its backend, and
+reopens after the verified snapshot succeeds. Failure stays closed. No automatic
+DB rollback, secret sharing, weakened health checks or release activation is added.
+
+See [host helper instructions](../scripts/server/README.md) for administrator
+installation and recovery. Host preparation/restarting the same active binary is
+separate from deploying a new application SHA pair; deployment remains explicit.
