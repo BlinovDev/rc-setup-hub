@@ -14,9 +14,10 @@ import tempfile
 import time
 import urllib.request
 
-# Root-owned installed modules; staging-only hooks preserve production behavior.
+# Root-owned installed modules; separate modules fence production and staging storage.
 sys.path.insert(0, "/usr/local/lib/rc-hub")
 import staging_media
+import production_media
 
 BASE = Path('/srv/international-drift-hub')
 SETTINGS = {
@@ -143,16 +144,9 @@ def deploy(environment, shas, release, c):
         print('Already deployed; health checks passed')
         return
     run('docker', 'compose', '-p', c['project'], '-f', str(c['compose']), 'up', '-d', '--wait', 'postgres')
-    if environment == 'staging':
-        staging_media.preflight(release, c, env_text)
-        staging_media.coherent_backup()
-    # Preserve the legacy production-only logical backup unchanged.
-    if environment == 'production':
-        backup_dir = Path('/var/backups')/c['project']
-        backup_dir.mkdir(mode=0o700, exist_ok=True)
-        backup = backup_dir/('predeploy-'+time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())+'.sql')
-        with backup.open('xb') as output:
-            run('docker', 'compose', '-p', c['project'], '-f', str(c['compose']), 'exec', '-T', 'postgres', 'sh', '-c', 'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-acl', stdout=output)
+    media_hooks = staging_media if environment == 'staging' else production_media
+    media_hooks.preflight(release, c, env_text)
+    media_hooks.coherent_backup()
     run('systemd-run', '--quiet', '--wait', '--collect', '--pipe', '--property=User='+c['user'], '--property=Group='+c['user'], '--property=EnvironmentFile='+c['env'], '--property=NoNewPrivileges=yes', '--property=ProtectSystem=strict', '--property=ProtectHome=yes', '--property=PrivateTmp=yes', '--property=CapabilityBoundingSet=', '--property=UMask=0077', str(release/'international-drift-hub-migrate'), 'up')
     # Probe candidate on a reserved loopback port before activating it.
     candidate = c['project']+'-candidate.service'
@@ -160,7 +154,7 @@ def deploy(environment, shas, release, c):
     candidate_env = Path('/run/'+c['project']+'-candidate.env')
     candidate_env.write_text(re.sub(r'^HTTP_ADDR=.*$', 'HTTP_ADDR=127.0.0.1:'+str(candidate_port), env_text, flags=re.MULTILINE))
     candidate_since = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-    writable = ['--property=ReadWritePaths='+str(staging_media.MEDIA)] if environment == 'staging' else []
+    writable = ['--property=ReadWritePaths='+str(media_hooks.MEDIA)]
     try:
         run('systemd-run', '--quiet', '--collect', '--unit='+candidate, '--property=User='+c['user'], '--property=Group='+c['user'], '--property=EnvironmentFile='+str(candidate_env), '--property=NoNewPrivileges=yes', '--property=ProtectSystem=strict', '--property=ProtectHome=yes', '--property=PrivateTmp=yes', '--property=CapabilityBoundingSet=', *writable, str(release/'international-drift-hub'))
         for attempt in range(20):
@@ -172,11 +166,10 @@ def deploy(environment, shas, release, c):
                     raise RuntimeError('Candidate health failed; active release unchanged')
                 time.sleep(1)
     except Exception:
-        if environment == 'staging':
-            staging_media.candidate_diagnostics(candidate, candidate_since, env_text)
+        media_hooks.candidate_diagnostics(candidate, candidate_since, env_text)
         raise
     finally:
-        subprocess.run(['systemctl', 'stop', candidate], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL if environment == 'staging' else None)
+        subprocess.run(['systemctl', 'stop', candidate], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         candidate_env.unlink(missing_ok=True)
     # Link activation does not alter the existing unit or production environment.
     c['backend'].mkdir(parents=True, exist_ok=True)

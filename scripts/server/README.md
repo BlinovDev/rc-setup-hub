@@ -117,3 +117,52 @@ python3 -m unittest discover -s scripts/server -v
 
 These tests use isolated temporary paths/mocks and do not contact a real host or
 read application secrets. Backend CI runs them in addition to existing Go checks.
+
+## Production host preparation
+
+The earlier staging-only instructions above describe the initial repair. Production
+now has a separate `production_media.py`, installed root:root 0644 in the same
+root-owned helper directory. Install it alongside the updated controller; do not
+replace or change the staging module. `production-backup.sh` is installed root:root
+0700 at `/srv/international-drift-hub/ops/backup-postgres.sh`, keeping the existing
+production timer schedule. Both snapshot jobs and deployment use their respective
+environment lock. The main-history gate remains mandatory for production.
+
+Production prerequisites deliberately use different resources:
+
+| Resource | Production |
+| --- | --- |
+| Runtime user/group | `international-drift-hub` |
+| Private media, owner mode | `/var/lib/international-drift-hub/media`, runtime 0700 |
+| Environment | `/etc/international-drift-hub/backend.env`, root 0600 |
+| Encryption key | `/etc/international-drift-hub/backup.key`, root 0600 |
+| Writable systemd mount | `ReadWritePaths=/var/lib/international-drift-hub/media` |
+| Backend unit | `international-drift-hub.service` |
+| Candidate loopback | `127.0.0.1:18180` |
+| nginx body-temp owner mode | `/var/lib/nginx/idh-production-body`, www-data 0700 |
+| Maintenance flag | `/run/rc-hub-production-maintenance` |
+| Snapshot directory | `/var/backups/international-drift-hub`, root 0700 |
+| Compose file/project | `/srv/international-drift-hub/ops/postgres.compose.yml`, `international-drift-hub` |
+
+Set production MEDIA_DIR only to its dedicated path. Add its ReadWritePaths in
+`/etc/systemd/system/international-drift-hub.service.d/media.conf`; keep strict
+sandbox/security properties. Configure production API/auth/admin nginx location
+with the same 26m/120s settings as staging but its own body-temp and maintenance
+paths. Validate nginx before reload. Never point production at staging data, key,
+media, runtime user or database.
+
+The encryption format, coherent drain/stop/snapshot/verify/reopen sequence,
+retention and fail-closed recovery procedure are identical to staging, with the
+production module's fixed constants. Escrow the **production** encryption key
+separately; it is never emitted, stored in Git, or sent to Actions. Test decrypt,
+checksums, PostgreSQL restore and media recovery using a disposable DB/private
+directory, never by restoring over production or staging. A snapshot without photo
+records cannot establish populated-gallery recovery; that remains a QA gate.
+
+Preparing the host may briefly restart the **same** active backend for a coherent
+snapshot/drop-in application. It does not switch release symlinks, apply migrations,
+or deploy a new release. After preparation, the approved Actions deployment can
+retry its already-uploaded immutable SHA pair; the helper verifies main ancestry,
+media preflight and coherent pre-migration snapshot before candidate health and
+activation. Candidate failure now emits redacted journal diagnostics in either
+environment; a collected unit's harmless cleanup error is suppressed.

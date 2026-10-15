@@ -14,6 +14,7 @@ from unittest.mock import patch, Mock
 
 sys.path.insert(0, str(Path(__file__).parent))
 import staging_media as media
+import production_media
 spec = importlib.util.spec_from_file_location('controller', Path(__file__).with_name('rc-hub-control.py'))
 controller = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(controller)
@@ -90,7 +91,7 @@ class MediaTests(unittest.TestCase):
             self.assertIn(('systemctl', 'start', media.UNIT), calls)
             with tarfile.open(destination) as archive:
                 manifest = json.load(archive.extractfile('manifest.json'))
-                self.assertEqual(manifest['environment'], 'staging')
+                self.assertEqual(manifest['environment'], 'production' if media is production_media else 'staging')
                 self.assertEqual(manifest['schema'], '6')
                 for name, digest in manifest['sha256'].items():
                     self.assertEqual(hashlib.sha256(archive.extractfile(name).read()).hexdigest(), digest)
@@ -128,6 +129,7 @@ class MediaTests(unittest.TestCase):
 
 class ControllerTests(unittest.TestCase):
     def candidate_failure(self, environment):
+        hooks = media if environment == 'staging' else production_media
         with tempfile.TemporaryDirectory() as temp:
             base = Path(temp)
             release = base/'release'; release.mkdir()
@@ -155,30 +157,31 @@ class ControllerTests(unittest.TestCase):
                  patch.object(controller, 'validate_release'), patch.object(controller, 'production_gate') as gate, \
                  patch.object(controller, 'run', side_effect=run), patch.object(controller, 'probe', side_effect=RuntimeError('unhealthy')), \
                  patch.object(controller.time, 'sleep'), patch.object(controller.subprocess, 'run') as cleanup, \
-                 patch.object(media, 'preflight', side_effect=lambda *a: events.append('preflight')) as preflight, \
-                 patch.object(media, 'coherent_backup', side_effect=lambda: events.append('backup')) as backup, \
-                 patch.object(media, 'candidate_diagnostics') as diagnostics, patch.object(controller, 'link') as link:
+                 patch.object(hooks, 'preflight', side_effect=lambda *a: events.append('preflight')) as preflight, \
+                 patch.object(hooks, 'coherent_backup', side_effect=lambda: events.append('backup')) as backup, \
+                 patch.object(hooks, 'candidate_diagnostics') as diagnostics, patch.object(controller, 'link') as link:
                 with self.assertRaisesRegex(RuntimeError, 'Candidate health failed'):
                     controller.deploy(environment, ['a'*40, 'b'*40], release, c)
                 link.assert_not_called()
                 self.assertFalse((base/'candidate.env').exists())
+                self.assertEqual(events[:3], ['preflight', 'backup', 'migration'])
+                diagnostics.assert_called_once()
+                candidate = next(args for args in commands if any(arg.startswith('--unit=') for arg in args))
+                self.assertIn('--property=ReadWritePaths='+str(hooks.MEDIA), candidate)
+                self.assertEqual(cleanup.call_args.kwargs['stderr'], subprocess.DEVNULL)
                 if environment == 'staging':
-                    self.assertEqual(events[:3], ['preflight', 'backup', 'migration'])
-                    diagnostics.assert_called_once()
-                    candidate = next(args for args in commands if any(arg.startswith('--unit=') for arg in args))
-                    self.assertIn('--property=ReadWritePaths='+str(media.MEDIA), candidate)
                     gate.assert_not_called()
-                    self.assertEqual(cleanup.call_args.kwargs['stderr'], subprocess.DEVNULL)
                 else:
-                    preflight.assert_not_called(); backup.assert_not_called(); diagnostics.assert_not_called()
                     gate.assert_called_once()
-                    self.assertEqual(events, ['migration'])
 
     def test_staging_failure_keeps_release_and_collects_journal(self):
         self.candidate_failure('staging')
 
     def test_production_does_not_use_staging_hooks(self):
-        self.candidate_failure('production')
+        with patch.object(media, 'preflight') as staging_preflight, patch.object(media, 'coherent_backup') as staging_backup:
+            self.candidate_failure('production')
+            staging_preflight.assert_not_called()
+            staging_backup.assert_not_called()
 
 
 if __name__ == '__main__':

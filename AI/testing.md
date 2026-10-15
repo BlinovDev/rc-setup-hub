@@ -191,3 +191,11 @@ Use the exact CI result on the PR as evidence for those gates if local Docker/co
 are unavailable. No missing decoder test may be silently skipped. FE roadmap and
 320/375/390/768/1280 browser matrix, physical touch/iPhone HEIC and live two-account
 staging QA are pending linked Issue #13; no deployment is authorized by Issue #10.
+
+Production host regression coverage reuses the storage/snapshot failure and
+redaction cases against the separate production module and checks resource
+isolation. Controller cases require preflight and coherent backup before migrations
+in both environments, retain the production main-SHA gate, and reject candidate
+activation on failed health. Native host preparation additionally runs the exact
+production candidate's `--check-media` as the runtime user under the strict
+sandbox and restores the encrypted matched snapshot into disposable resources.
