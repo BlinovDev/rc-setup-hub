@@ -199,3 +199,13 @@ in both environments, retain the production main-SHA gate, and reject candidate
 activation on failed health. Native host preparation additionally runs the exact
 production candidate's `--check-media` as the runtime user under the strict
 sandbox and restores the encrypted matched snapshot into disposable resources.
+
+## Engineering skill foundation checks
+
+For repository-local instruction/provenance changes, run
+`python3 scripts/verify-engineering-skills.py` and
+`python3 -m unittest discover -s scripts -p 'test_engineering_skills.py' -v`
+from repository root. These validate packaging, not Codex runtime behavior.
+Fresh Cloud discovery/invocation smoke prompts and explicitly unverified capabilities
+are documented in `AI/engineering-skills.md`. Existing application verification
+requirements above remain unchanged.
