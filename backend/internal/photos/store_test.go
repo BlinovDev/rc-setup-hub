@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -170,5 +172,174 @@ func TestOrientationMetadataResizeAndSweep(t *testing.T) {
 	}
 	if _, err := s.Open(p.Key, false); err != nil {
 		t.Fatal("live media removed", err)
+	}
+}
+
+// A phone-sized compressed JPEG is small on the wire but needs a >64 MiB
+// ImageMagick pixel cache. Keep this realistic dimension separate from tiny fixtures.
+func TestPhoneResolutionJPEG(t *testing.T) {
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(t.TempDir(), "IMG_4144.jpeg")
+	if out, err := exec.Command(s.convert, "-size", "4284x5712", "gradient:", source).CombinedOutput(); err != nil {
+		t.Fatal(err, string(out))
+	}
+	raw, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) > MaxBytes {
+		t.Fatal("fixture exceeds upload limit")
+	}
+	photo, err := s.Process(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if photo.Width != 1800 || photo.Height != 2400 || photo.ThumbnailWidth != 640 || photo.ThumbnailHeight != 640 {
+		t.Fatal(photo)
+	}
+}
+
+func TestHEIFOriginJPEGAndContentDetection(t *testing.T) {
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate Photos exporting a HEIF source as JPEG, retaining only actual bytes
+	// as the server's authority (filenames and multipart MIME do not reach Process).
+	source := filepath.Join(t.TempDir(), "source.heic")
+	if err := os.WriteFile(source, decoderFixture, 0600); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "export.jpeg")
+	if out, err := exec.Command(s.convert, "HEIC:"+source+"[0]", "JPEG:"+target).CombinedOutput(); err != nil {
+		t.Fatal(err, string(out))
+	}
+	raw, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if format, err := Format(raw); err != nil || format != "JPEG" {
+		t.Fatal(format, err)
+	}
+	for _, raw := range [][]byte{decoderFixture, raw} {
+		photo, err := s.Process(context.Background(), raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f, err := s.Open(photo.Key, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, format, err := image.Decode(f)
+		_ = f.Close()
+		if err != nil || format != "jpeg" {
+			t.Fatal(format, err)
+		}
+	}
+}
+
+func TestHEIFBrands(t *testing.T) {
+	box := func(brands ...string) []byte {
+		raw := make([]byte, 16+4*(len(brands)-1))
+		binary.BigEndian.PutUint32(raw[:4], uint32(len(raw)))
+		copy(raw[4:8], "ftyp")
+		copy(raw[8:12], brands[0])
+		for i, brand := range brands[1:] {
+			copy(raw[16+4*i:], brand)
+		}
+		return raw
+	}
+	for _, brands := range [][]string{{"heic"}, {"mif1", "heic"}, {"heix", "mif1"}} {
+		if got, err := Format(box(brands...)); err != nil || got != "HEIC" {
+			t.Fatal(brands, got, err)
+		}
+	}
+	for _, raw := range [][]byte{box("avif", "mif1"), box("mif1", "avis"), box("mp42"), []byte("not a JPEG"), box("heic")[:15]} {
+		if _, err := Format(raw); err == nil {
+			t.Fatal("invalid content accepted")
+		}
+	}
+}
+
+func TestValidationReasonsAndPixelLimit(t *testing.T) {
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(t.TempDir(), "over-limit.jpg")
+	if out, err := exec.Command(s.convert, "-size", "8000x6400", "xc:red", source).CombinedOutput(); err != nil {
+		t.Fatal(err, string(out))
+	}
+	oversizedDimensions, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		raw  []byte
+		want error
+	}{
+		{nil, ErrSize}, {make([]byte, MaxBytes+1), ErrSize},
+		{[]byte("<svg/>"), ErrFormat}, {[]byte{255, 216, 255, 0}, ErrDecode},
+		{oversizedDimensions, ErrDimensions},
+	} {
+		_, err := s.Process(context.Background(), tc.raw)
+		if !errors.Is(err, tc.want) || !errors.Is(err, ErrImage) {
+			t.Fatalf("got %v, want %v", err, tc.want)
+		}
+	}
+	for _, exitCode := range []int{1, 25, 24} {
+		err := exec.Command("sh", "-c", fmt.Sprintf("exit %d", exitCode)).Run()
+		got := decoderFailure(context.Background(), "convert", "JPEG", err)
+		if errors.Is(got, ErrImage) != (exitCode == 1) {
+			t.Fatalf("exit %d misclassified: %v", exitCode, got)
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if got := decoderFailure(ctx, "identify", "JPEG", context.Canceled); !errors.Is(got, context.Canceled) {
+		t.Fatal(got)
+	}
+}
+
+func TestMaximumResolutionJPEG(t *testing.T) {
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(t.TempDir(), "50mp.jpeg")
+	if out, err := exec.Command(s.convert, "-size", "5000x10000", "gradient:", source).CombinedOutput(); err != nil {
+		t.Fatal(err, string(out))
+	}
+	raw, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	photo, err := s.Process(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if photo.Width != 1200 || photo.Height != 2400 || photo.ThumbnailWidth != 640 || photo.ThumbnailHeight != 640 {
+		t.Fatal(photo)
+	}
+}
+
+func TestPhoneResolutionHEIF(t *testing.T) {
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile("testdata/phone-24mp.heic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	photo, err := s.Process(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if photo.Width != 1800 || photo.Height != 2400 || photo.ThumbnailWidth != 640 || photo.ThumbnailHeight != 640 {
+		t.Fatal(photo)
 	}
 }

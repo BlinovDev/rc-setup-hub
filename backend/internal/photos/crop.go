@@ -110,6 +110,11 @@ func (s *Store) writeThumbnail(ctx context.Context, dir, source string, crop Cro
 	if err != nil {
 		return Image{}, err
 	}
+	info, statErr := f.Stat()
+	if statErr != nil || info.Size() > processedFileLimit {
+		_ = f.Close()
+		return Image{}, errors.New("cropped thumbnail exceeds publication limit")
+	}
 	cfg, _, decodeErr := image.DecodeConfig(f)
 	syncErr := f.Sync()
 	closeErr := f.Close()

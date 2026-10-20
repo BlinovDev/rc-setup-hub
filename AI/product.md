@@ -152,3 +152,11 @@ failed applies retain the previous thumbnail. This explicitly supersedes the
 previous proportional-thumbnail/no-crop policy only for thumbnail framing, not
 full-photo editing. Existing photo limits, formats, privacy and cleanup remain.
 See AI/photo-ux-v2.md for the split roadmap and pending frontend/live QA gates.
+
+## Photo upload diagnostics (Issue #14)
+
+Photo validation distinguishes unsupported content, undecodable content, byte size,
+pixel dimensions and the ten-photo limit. Resource termination/timeouts are server
+failures rather than invalid-image claims. Content remains authoritative even when
+iOS exports HEIF as JPEG or filename/MIME metadata disagrees. The upload, pixel,
+count, orientation, metadata-stripping and private-media rules above are unchanged.

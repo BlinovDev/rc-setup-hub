@@ -287,3 +287,17 @@ lock through generation/commit; deletion cannot resurrect media. GET privacy and
 no-store rules remain in force regardless of revision query or known URLs.
 Frontend Issue #13 must copy the exact implementation PR-head contract and generate
 types. Record the compatible BE/FE pair on linked PRs when FE is implemented.
+
+## Photo upload error details (Issue #14)
+
+The existing APIError.error string now distinguishes these 400 reasons:
+`invalid photo: unsupported image format`, `invalid photo: image could not be decoded`,
+`invalid photo: file must be nonempty and at most 25 MiB`,
+`invalid photo: image must be at most 50 megapixels`.
+Multipart byte/empty rejection remains `file exceeds 25 MiB or is empty`;
+count remains `a setup may have at most 10 photos`. Clients should translate only
+known strings and retain a generic fallback. No new DTO/status is required.
+Processor slot exhaustion maps to 503; termination/timeouts/invocation failures
+map to generic 500. Logs contain stage/format/exit status only, never raw decoder
+stderr, filename, image bytes, paths or EXIF. Reverse proxies may return non-JSON
+413 independently; the frontend should explain that request-size rejection.

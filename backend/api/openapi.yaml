@@ -728,6 +728,9 @@ paths:
         KiB multipart overhead, 50 megapixels. JPEG/PNG/WebP/HEIC/HEIF content only. First frame
         becomes stripped oriented resized JPEG; first photo is cover. Setup must already exist.
         Maximum ten photos. Owner is checked before decoding. Busy uploads return 503; write failures are retryable 500.
+        Validation error strings distinguish unsupported format, undecodable image, file size,
+        pixel limit and photo count. Resource termination/timeouts are retryable server errors,
+        not invalid-image responses. Filenames and multipart MIME types never select the decoder.
       requestBody:
         required: true
         content:
