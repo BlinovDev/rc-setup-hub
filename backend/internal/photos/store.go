@@ -209,7 +209,13 @@ func (s *Store) Process(ctx context.Context, raw []byte) (Image, error) {
 		// JPEG's native downsampling avoids needlessly caching all source pixels
 		// for high-resolution phone exports. The original dimensions were checked
 		// above, so this hint cannot bypass the 50 MP input limit.
-		_, err = s.run(ctx, dir, s.convert, "-limit", "memory", "256MiB", "-limit", "map", "256MiB", "-limit", "disk", "512MiB", "-define", "jpeg:size=2400x2400", input, "-auto-orient", "-resize", output.size, "-background", "white", "-alpha", "remove", "-colorspace", "sRGB", "-strip", "-quality", "85", "JPEG:"+filepath.Join(dir, output.name))
+		args := []string{"-limit", "memory", "256MiB", "-limit", "map", "256MiB", "-limit", "disk", "512MiB"}
+		// ImageMagick can upscale tiny JPEGs when a larger hint is supplied.
+		if format == "JPEG" && (w > 2400 || h > 2400) {
+			args = append(args, "-define", "jpeg:size=2400x2400")
+		}
+		args = append(args, input, "-auto-orient", "-resize", output.size, "-background", "white", "-alpha", "remove", "-colorspace", "sRGB", "-strip", "-quality", "85", "JPEG:"+filepath.Join(dir, output.name))
+		_, err = s.run(ctx, dir, s.convert, args...)
 		if err != nil {
 			return Image{}, decoderFailure(ctx, "convert", format, err)
 		}
