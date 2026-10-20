@@ -41,8 +41,14 @@ func (s *Service) uploadPhoto(ctx context.Context, ownerID, setupID, requestID s
 	return p, err
 }
 func photoFailure(w http.ResponseWriter, err error) {
+	if errors.Is(err, photos.ErrBusy) {
+		respond(w, http.StatusServiceUnavailable, struct {
+			Error string `json:"error"`
+		}{"photo uploads busy; retry with the same request_id"})
+		return
+	}
 	if errors.Is(err, photos.ErrImage) {
-		failure(w, invalid(photos.ErrImage.Error()))
+		failure(w, invalid(err.Error()))
 		return
 	}
 	failure(w, err)

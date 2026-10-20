@@ -287,3 +287,8 @@ lock through generation/commit; deletion cannot resurrect media. GET privacy and
 no-store rules remain in force regardless of revision query or known URLs.
 Frontend Issue #13 must copy the exact implementation PR-head contract and generate
 types. Record the compatible BE/FE pair on linked PRs when FE is implemented.
+
+Photo upload 400 responses retain the ErrorResponse shape and now carry safe
+specific validation reasons. Format detection still uses bytes, not filename/MIME;
+original JPEG bounds are checked before decoder shrinking. See the committed
+OpenAPI upload description and AI/issue-14-photo-upload.md.

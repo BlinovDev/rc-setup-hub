@@ -209,3 +209,10 @@ from repository root. These validate packaging, not Codex runtime behavior.
 Fresh Cloud discovery/invocation smoke prompts and explicitly unverified capabilities
 are documented in `AI/engineering-skills.md`. Existing application verification
 requirements above remain unchanged.
+
+## Backend Issue #14 regressions
+
+See AI/issue-14-photo-upload.md for failing-before/passing-after JPEG cache evidence,
+HEIF-origin conversion/content detection, unchanged limit validation, safe upload
+errors and physical iPhone/paired staging verification steps. Synthetic resolution
+and libheif fixtures do not substitute for the incident original or Safari QA.

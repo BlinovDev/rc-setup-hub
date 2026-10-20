@@ -152,3 +152,12 @@ failed applies retain the previous thumbnail. This explicitly supersedes the
 previous proportional-thumbnail/no-crop policy only for thumbnail framing, not
 full-photo editing. Existing photo limits, formats, privacy and cleanup remain.
 See AI/photo-ux-v2.md for the split roadmap and pending frontend/live QA gates.
+
+## Photo upload failure feedback (backend Issue #14)
+
+Upload validation distinguishes content/decode, byte size, original pixel dimensions
+and photo-count failures. The client shows safe validation reasons and identifies
+HTTP 413 request limits separately; server/network failures remain retryable.
+Original JPEG bounds are validated before decoder-side shrinking; all existing
+image/security limits, privacy and idempotency remain. See AI/issue-14-photo-upload.md
+for evidence, fixture limits and pending physical iPhone/staging QA.

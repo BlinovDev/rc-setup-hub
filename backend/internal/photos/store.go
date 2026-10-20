@@ -13,6 +13,7 @@ import (
 	"image"
 	_ "image/jpeg"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,6 +30,14 @@ const MaxBytes = 25 * 1024 * 1024
 const MaxPixels = 50_000_000
 
 var ErrImage = errors.New("unsupported, corrupt or oversized image; use JPEG, PNG, WebP or HEIC/HEIF (25 MiB, 50 megapixels maximum)")
+
+// imageRejection carries a safe, actionable validation reason while preserving ErrImage.
+type imageRejection struct{ Reason string }
+
+func (e *imageRejection) Error() string { return e.Reason }
+func (e *imageRejection) Unwrap() error { return ErrImage }
+func reject(reason string) error        { return &imageRejection{Reason: reason} }
+
 var safeKey = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 type Image struct {
@@ -103,7 +112,7 @@ func Format(raw []byte) (string, error) {
 		// Whitelist HEVC/HEIF still-image brands; AVIF is deliberately unsupported.
 		boxLength := int(binary.BigEndian.Uint32(raw[:4]))
 		if boxLength < 16 || boxLength > 4096 || boxLength > len(raw) {
-			return "", ErrImage
+			return "", reject("unsupported image content; use JPEG, PNG, WebP or HEIC/HEIF")
 		}
 		heif := false
 		for i := 8; i+4 <= boxLength; i += 4 {
@@ -112,7 +121,7 @@ func Format(raw []byte) (string, error) {
 			} // minor version is not a compatibility brand
 			switch string(raw[i : i+4]) {
 			case "avif", "avis":
-				return "", ErrImage
+				return "", reject("unsupported image content; use JPEG, PNG, WebP or HEIC/HEIF")
 			case "heic", "heix", "hevc", "hevx", "mif1":
 				heif = true
 			}
@@ -121,7 +130,7 @@ func Format(raw []byte) (string, error) {
 			return "HEIC", nil
 		}
 	}
-	return "", ErrImage
+	return "", reject("unsupported image content; use JPEG, PNG, WebP or HEIC/HEIF")
 }
 func (s *Store) run(ctx context.Context, dir, binary string, args ...string) ([]byte, error) {
 	// Address space, CPU, output file size, decoder cache and wall time are bounded.
@@ -135,7 +144,7 @@ func (s *Store) run(ctx context.Context, dir, binary string, args ...string) ([]
 }
 func (s *Store) Process(ctx context.Context, raw []byte) (Image, error) {
 	if len(raw) == 0 || len(raw) > MaxBytes {
-		return Image{}, ErrImage
+		return Image{}, reject("file exceeds 25 MiB or is empty")
 	}
 	format, err := Format(raw)
 	if err != nil {
@@ -145,7 +154,7 @@ func (s *Store) Process(ctx context.Context, raw []byte) (Image, error) {
 	case s.slots <- struct{}{}:
 		defer func() { <-s.slots }()
 	default:
-		return Image{}, errors.New("photo processor busy; retry later")
+		return Image{}, ErrBusy
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -161,21 +170,37 @@ func (s *Store) Process(ctx context.Context, raw []byte) (Image, error) {
 	input := format + ":" + source + "[0]"
 	bounds, err := s.run(ctx, dir, s.identify, "-limit", "memory", "256MiB", "-limit", "map", "256MiB", "-limit", "disk", "512MiB", "-ping", "-format", "%w %h", input)
 	if err != nil {
-		return Image{}, ErrImage
+		slog.WarnContext(ctx, "photo decoder failed", "stage", "identify", "format", format, "bytes", len(raw), "cancelled", ctx.Err() != nil)
+		return Image{}, reject("image could not be decoded; export it as JPEG and select it again")
 	}
 	dims := strings.Fields(string(bounds))
 	if len(dims) != 2 {
-		return Image{}, ErrImage
+		return Image{}, reject("image could not be decoded; export it as JPEG and select it again")
 	}
 	w, e1 := strconv.ParseInt(dims[0], 10, 64)
 	h, e2 := strconv.ParseInt(dims[1], 10, 64)
-	if e1 != nil || e2 != nil || w < 1 || h < 1 || w > MaxPixels || h > MaxPixels || w*h > MaxPixels {
-		return Image{}, ErrImage
+	if e1 != nil || e2 != nil || w < 1 || h < 1 {
+		return Image{}, reject("image has invalid dimensions")
+	}
+	if w > MaxPixels || h > MaxPixels || w*h > MaxPixels {
+		return Image{}, reject("image dimensions exceed 50 megapixels")
+	}
+	// JPEG decoder-side scaling avoids full-resolution Q16 pixel caches spilling
+	// past the unchanged 64 MiB process file limit. Validate original bounds first.
+	// Match the natural aspect ratio: a square hint needlessly decodes more pixels.
+	decodeArgs := []string{}
+	if format == "JPEG" && max(w, h) > 2400 {
+		long := max(w, h)
+		decodeArgs = []string{"-define", fmt.Sprintf("jpeg:size=%dx%d", (w*2400+long-1)/long, (h*2400+long-1)/long)}
 	}
 	for _, output := range []struct{ name, size string }{{"full.jpg", "2400x2400>"}} {
-		_, err = s.run(ctx, dir, s.convert, "-limit", "memory", "256MiB", "-limit", "map", "256MiB", "-limit", "disk", "512MiB", input, "-auto-orient", "-resize", output.size, "-background", "white", "-alpha", "remove", "-colorspace", "sRGB", "-strip", "-quality", "85", "JPEG:"+filepath.Join(dir, output.name))
+		args := []string{"-limit", "memory", "256MiB", "-limit", "map", "256MiB", "-limit", "disk", "512MiB"}
+		args = append(args, decodeArgs...)
+		args = append(args, input, "-auto-orient", "-resize", output.size, "-background", "white", "-alpha", "remove", "-colorspace", "sRGB", "-strip", "-quality", "85", "JPEG:"+filepath.Join(dir, output.name))
+		_, err = s.run(ctx, dir, s.convert, args...)
 		if err != nil {
-			return Image{}, ErrImage
+			slog.WarnContext(ctx, "photo decoder failed", "stage", "normalize", "format", format, "bytes", len(raw), "width", w, "height", h, "cancelled", ctx.Err() != nil)
+			return Image{}, reject("image could not be decoded; export it as JPEG and select it again")
 		}
 	}
 	fullFile, err := os.Open(filepath.Join(dir, "full.jpg"))

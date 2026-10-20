@@ -267,6 +267,14 @@ func TestPhotoHTTPAuthorizationAndRetry(t *testing.T) {
 			t.Fatal("bad upload", w.Code, w.Body)
 		}
 	}
+	// Content, not the misleading filename or multipart MIME, owns validation.
+	heif, err := os.ReadFile("../photos/testdata/phone-format.heic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := upload(cookie, "33333333-3333-4333-8333-333333333333", heif, ""); w.Code != 201 {
+		t.Fatal("HEIF with misleading upload metadata", w.Code, w.Body)
+	}
 	provider.identity = users.Identity{Subject: "other", Email: "other@example.test", Name: "Other"}
 	otherCookie := login(t, router)
 	if w := request(router, "PUT", cropPath, `not JSON`, otherCookie); w.Code != 404 {

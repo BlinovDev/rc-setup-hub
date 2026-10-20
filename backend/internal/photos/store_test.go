@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -170,5 +171,107 @@ func TestOrientationMetadataResizeAndSweep(t *testing.T) {
 	}
 	if _, err := s.Open(p.Key, false); err != nil {
 		t.Fatal("live media removed", err)
+	}
+}
+
+// Synthetic dimensions from #14; not a physical iPhone capture.
+func TestPhoneResolutionJPEG(t *testing.T) {
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw bytes.Buffer
+	if err := jpeg.Encode(&raw, image.NewGray(image.Rect(0, 0, 4284, 5712)), nil); err != nil {
+		t.Fatal(err)
+	}
+	if raw.Len() > MaxBytes {
+		t.Fatal("fixture exceeds upload limit")
+	}
+	p, err := s.Process(context.Background(), raw.Bytes())
+	if err != nil {
+		t.Fatal("valid phone-resolution JPEG rejected", err)
+	}
+	if p.Width != 1800 || p.Height != 2400 {
+		t.Fatal("normalized dimensions", p)
+	}
+}
+
+func TestHEIFOriginJPEGAndContentDetection(t *testing.T) {
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile("testdata/phone-format.heic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := s.Process(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := s.Open(p.Key, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	converted, err := os.ReadFile(f.Name())
+	_ = f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if format, err := Format(converted); err != nil || format != "JPEG" {
+		t.Fatal(format, err)
+	}
+	again, err := s.Process(context.Background(), converted)
+	if err != nil || again.Width != p.Width || again.Height != p.Height {
+		t.Fatal(again, err)
+	}
+	// A generic HEIF major brand with an HEVC compatible brand is accepted;
+	// the same container advertising AVIF must still be rejected.
+	header := func(brand string) []byte {
+		b := make([]byte, 24)
+		binary.BigEndian.PutUint32(b, 24)
+		copy(b[4:], "ftypmif1")
+		copy(b[16:], "heic"+brand)
+		return b
+	}
+	if format, err := Format(header("mif1")); err != nil || format != "HEIC" {
+		t.Fatal(format, err)
+	}
+	if _, err := Format(header("avif")); !errors.Is(err, ErrImage) {
+		t.Fatal("AVIF accepted", err)
+	}
+	for _, tc := range []struct {
+		raw    []byte
+		reason string
+	}{
+		{nil, "file exceeds 25 MiB or is empty"},
+		{make([]byte, MaxBytes+1), "file exceeds 25 MiB or is empty"},
+		{[]byte("<svg/>"), "unsupported image content; use JPEG, PNG, WebP or HEIC/HEIF"},
+		{[]byte{0xff, 0xd8, 0xff}, "image could not be decoded; export it as JPEG and select it again"},
+	} {
+		_, err := s.Process(context.Background(), tc.raw)
+		if !errors.Is(err, ErrImage) || err.Error() != tc.reason {
+			t.Fatal("validation reason", err)
+		}
+	}
+}
+
+// Original bounds must be checked before the JPEG decoder is asked to shrink.
+func TestJPEGScalingDoesNotBypassPixelLimit(t *testing.T) {
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw bytes.Buffer
+	if err := jpeg.Encode(&raw, image.NewGray(image.Rect(0, 0, 8000, 7000)), nil); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.Process(context.Background(), raw.Bytes())
+	if !errors.Is(err, ErrImage) || err.Error() != "image dimensions exceed 50 megapixels" {
+		t.Fatal("original dimensions not enforced", err)
+	}
+	entries, err := os.ReadDir(s.root)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("rejected source retained", entries, err)
 	}
 }
