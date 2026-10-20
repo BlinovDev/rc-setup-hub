@@ -228,3 +228,5 @@ See AI/issue-14-investigation.md for evidence and the unexecuted staging checkli
 `TestMaximumResolutionJPEG` also accepts a generated exact-50-MP JPEG under the
 unchanged memory/cache budgets using native JPEG downsampling after original
 source dimension validation; the separate 51.2 MP case remains rejected.
+`TestPhoneResolutionHEIF` processes the synthetic 24.47 MP HEVC HEIF fixture under
+the same native resource limits; provenance is recorded in testdata/README.md.

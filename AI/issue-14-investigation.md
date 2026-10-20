@@ -71,3 +71,8 @@ without that hint and rejected above 50 MP. `TestMaximumResolutionJPEG` verifies
 successful processing exactly at the 50 MP boundary without raising cache/memory
 budgets. This also reduces work for iOS high-resolution JPEG exports. HEIF decoding
 continues through the existing pinned native codec and bounded resources.
+
+`TestPhoneResolutionHEIF` also processes a committed synthetic 4284x5712 HEVC HEIF
+gradient (7.2 KiB) successfully under the same bounded native pipeline. Its provenance
+is in the testdata README. This exercises actual phone-resolution HEIF bytes; it is
+not an iPhone camera capture, so device/export variants still require staging QA.

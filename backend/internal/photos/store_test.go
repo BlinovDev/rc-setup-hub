@@ -325,3 +325,21 @@ func TestMaximumResolutionJPEG(t *testing.T) {
 		t.Fatal(photo)
 	}
 }
+
+func TestPhoneResolutionHEIF(t *testing.T) {
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile("testdata/phone-24mp.heic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	photo, err := s.Process(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if photo.Width != 1800 || photo.Height != 2400 || photo.ThumbnailWidth != 640 || photo.ThumbnailHeight != 640 {
+		t.Fatal(photo)
+	}
+}
