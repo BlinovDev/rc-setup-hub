@@ -13,12 +13,14 @@ import (
 	"image"
 	_ "image/jpeg"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -28,7 +30,17 @@ var decoderFixture []byte
 const MaxBytes = 25 * 1024 * 1024
 const MaxPixels = 50_000_000
 
-var ErrImage = errors.New("unsupported, corrupt or oversized image; use JPEG, PNG, WebP or HEIC/HEIF (25 MiB, 50 megapixels maximum)")
+var ErrImage = errors.New("invalid photo")
+var ErrFormat = fmt.Errorf("%w: unsupported image format", ErrImage)
+var ErrDecode = fmt.Errorf("%w: image could not be decoded", ErrImage)
+var ErrSize = fmt.Errorf("%w: file must be nonempty and at most 25 MiB", ErrImage)
+var ErrDimensions = fmt.Errorf("%w: image must be at most 50 megapixels", ErrImage)
+
+// ImageMagick's pixel cache is an uncompressed temporary file, not an output
+// image. Its per-file ceiling must match the existing bounded disk-cache budget.
+const decoderFileLimit = 512 * 1024 * 1024
+const processedFileLimit = 64 * 1024 * 1024
+
 var safeKey = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 type Image struct {
@@ -103,7 +115,7 @@ func Format(raw []byte) (string, error) {
 		// Whitelist HEVC/HEIF still-image brands; AVIF is deliberately unsupported.
 		boxLength := int(binary.BigEndian.Uint32(raw[:4]))
 		if boxLength < 16 || boxLength > 4096 || boxLength > len(raw) {
-			return "", ErrImage
+			return "", ErrFormat
 		}
 		heif := false
 		for i := 8; i+4 <= boxLength; i += 4 {
@@ -112,7 +124,7 @@ func Format(raw []byte) (string, error) {
 			} // minor version is not a compatibility brand
 			switch string(raw[i : i+4]) {
 			case "avif", "avis":
-				return "", ErrImage
+				return "", ErrFormat
 			case "heic", "heix", "hevc", "hevx", "mif1":
 				heif = true
 			}
@@ -121,11 +133,11 @@ func Format(raw []byte) (string, error) {
 			return "HEIC", nil
 		}
 	}
-	return "", ErrImage
+	return "", ErrFormat
 }
 func (s *Store) run(ctx context.Context, dir, binary string, args ...string) ([]byte, error) {
 	// Address space, CPU, output file size, decoder cache and wall time are bounded.
-	cmd := exec.CommandContext(ctx, s.prlimit, append([]string{"--as=1073741824", "--cpu=20", "--fsize=67108864", "--", binary}, args...)...)
+	cmd := exec.CommandContext(ctx, s.prlimit, append([]string{"--as=1073741824", "--cpu=20", fmt.Sprintf("--fsize=%d", decoderFileLimit), "--", binary}, args...)...)
 	cmd.Env = append(os.Environ(), "OMP_NUM_THREADS=1", "MAGICK_THREAD_LIMIT=1", "MAGICK_TEMPORARY_PATH="+dir)
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -133,9 +145,30 @@ func (s *Store) run(ctx context.Context, dir, binary string, args ...string) ([]
 	err := cmd.Run()
 	return out.Bytes(), err
 }
+
+// decoderFailure never returns native stderr, image metadata, paths or bytes.
+func decoderFailure(ctx context.Context, stage, format string, err error) error {
+	exitCode, signaled := -1, false
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		exitCode = exit.ExitCode()
+		if status, ok := exit.Sys().(syscall.WaitStatus); ok {
+			signaled = status.Signaled()
+		}
+	}
+	slog.Warn("photo decoder failed", "stage", stage, "format", format, "exit_code", exitCode, "signaled", signaled)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	// Resource kills and invocation failures are server failures, not bad images.
+	if signaled || exit == nil || exitCode == int(syscall.SIGXFSZ) || exitCode == int(syscall.SIGXCPU) {
+		return errors.New("photo processing unavailable")
+	}
+	return ErrDecode
+}
 func (s *Store) Process(ctx context.Context, raw []byte) (Image, error) {
 	if len(raw) == 0 || len(raw) > MaxBytes {
-		return Image{}, ErrImage
+		return Image{}, ErrSize
 	}
 	format, err := Format(raw)
 	if err != nil {
@@ -145,7 +178,7 @@ func (s *Store) Process(ctx context.Context, raw []byte) (Image, error) {
 	case s.slots <- struct{}{}:
 		defer func() { <-s.slots }()
 	default:
-		return Image{}, errors.New("photo processor busy; retry later")
+		return Image{}, ErrBusy
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -161,21 +194,21 @@ func (s *Store) Process(ctx context.Context, raw []byte) (Image, error) {
 	input := format + ":" + source + "[0]"
 	bounds, err := s.run(ctx, dir, s.identify, "-limit", "memory", "256MiB", "-limit", "map", "256MiB", "-limit", "disk", "512MiB", "-ping", "-format", "%w %h", input)
 	if err != nil {
-		return Image{}, ErrImage
+		return Image{}, decoderFailure(ctx, "identify", format, err)
 	}
 	dims := strings.Fields(string(bounds))
 	if len(dims) != 2 {
-		return Image{}, ErrImage
+		return Image{}, ErrDecode
 	}
 	w, e1 := strconv.ParseInt(dims[0], 10, 64)
 	h, e2 := strconv.ParseInt(dims[1], 10, 64)
 	if e1 != nil || e2 != nil || w < 1 || h < 1 || w > MaxPixels || h > MaxPixels || w*h > MaxPixels {
-		return Image{}, ErrImage
+		return Image{}, ErrDimensions
 	}
 	for _, output := range []struct{ name, size string }{{"full.jpg", "2400x2400>"}} {
 		_, err = s.run(ctx, dir, s.convert, "-limit", "memory", "256MiB", "-limit", "map", "256MiB", "-limit", "disk", "512MiB", input, "-auto-orient", "-resize", output.size, "-background", "white", "-alpha", "remove", "-colorspace", "sRGB", "-strip", "-quality", "85", "JPEG:"+filepath.Join(dir, output.name))
 		if err != nil {
-			return Image{}, ErrImage
+			return Image{}, decoderFailure(ctx, "convert", format, err)
 		}
 	}
 	fullFile, err := os.Open(filepath.Join(dir, "full.jpg"))
@@ -195,6 +228,11 @@ func (s *Store) Process(ctx context.Context, raw []byte) (Image, error) {
 		f, err := os.OpenFile(filepath.Join(dir, name), os.O_RDWR, 0600)
 		if err != nil {
 			return Image{}, err
+		}
+		info, statErr := f.Stat()
+		if statErr != nil || info.Size() > processedFileLimit {
+			_ = f.Close()
+			return Image{}, errors.New("processed photo exceeds publication limit")
 		}
 		cfg, _, decodeErr := image.DecodeConfig(f)
 		syncErr := f.Sync()

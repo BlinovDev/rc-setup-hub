@@ -363,6 +363,42 @@ func TestPhotoHTTPAuthorizationAndRetry(t *testing.T) {
 	if err != nil || loaded.CoverPhoto != nil {
 		t.Fatal("final cover", err)
 	}
+	// Both native HEIF and its JPEG export must survive multipart MIME/name
+	// mismatches: the helper declares an SVG filename and octet-stream MIME.
+	heifPath := "../photos/testdata/phone-format.heic"
+	heif, err := os.ReadFile(heifPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jpegPath := filepath.Join(t.TempDir(), "export.jpeg")
+	if out, err := exec.Command("convert", "HEIC:"+heifPath+"[0]", "JPEG:"+jpegPath).CombinedOutput(); err != nil {
+		t.Fatal(err, string(out))
+	}
+	jpeg, err := os.ReadFile(jpegPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, raw := range [][]byte{heif, jpeg} {
+		key := fmt.Sprintf("22222222-2222-4222-8222-%012d", i)
+		w := upload(cookie, key, raw, "")
+		if w.Code != 201 {
+			t.Fatal(w.Code, w.Body)
+		}
+		var photo Photo
+		if err := json.Unmarshal(w.Body.Bytes(), &photo); err != nil {
+			t.Fatal(err)
+		}
+		if photo.ContentType != "image/jpeg" {
+			t.Fatal(photo)
+		}
+		if retry := upload(cookie, key, raw, ""); retry.Code != 201 {
+			t.Fatal(retry.Code, retry.Body)
+		}
+	}
+	w = upload(cookie, "33333333-3333-4333-8333-333333333333", []byte("not an image"), "")
+	if w.Code != 400 || !bytes.Contains(w.Body.Bytes(), []byte("unsupported image format")) {
+		t.Fatal(w.Code, w.Body)
+	}
 }
 
 // Coherent full pg_dump/media-copy restore into a second isolated PostgreSQL and

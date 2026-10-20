@@ -209,3 +209,19 @@ from repository root. These validate packaging, not Codex runtime behavior.
 Fresh Cloud discovery/invocation smoke prompts and explicitly unverified capabilities
 are documented in `AI/engineering-skills.md`. Existing application verification
 requirements above remain unchanged.
+
+## iPhone upload rejection regression (Issue #14)
+
+`TestPhoneResolutionJPEG` generates a compressed 4284x5712 (24.47 MP) portrait
+JPEG. It fails on the original 64 MiB subprocess file ceiling and passes when
+temporary pixel-cache files use the existing 512 MiB disk budget. Output publication
+retains a separate 64 MiB ceiling. `TestHEIFOriginJPEGAndContentDetection` processes
+native HEIF and an actual JPEG export of the existing licensed HEIF fixture.
+`TestHEIFBrands` covers compatible brands and AVIF/malformed rejection.
+`TestValidationReasonsAndPixelLimit` covers empty/oversized/corrupt/unsupported,
+a real 51.2 MP JPEG and resource-failure classification; `TestPhotoFailureReasons`
+checks HTTP error mappings without leaking internals. The PostgreSQL-backed photo
+HTTP test also uploads/retries HEIF and its JPEG export under misleading multipart
+name/MIME metadata. These fixtures are generated/licensed, not personal photographs.
+They do not prove physical iPhone Safari behavior or every Apple HEIF variant.
+See AI/issue-14-investigation.md for evidence and the unexecuted staging checklist.
