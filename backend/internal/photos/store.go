@@ -206,7 +206,10 @@ func (s *Store) Process(ctx context.Context, raw []byte) (Image, error) {
 		return Image{}, ErrDimensions
 	}
 	for _, output := range []struct{ name, size string }{{"full.jpg", "2400x2400>"}} {
-		_, err = s.run(ctx, dir, s.convert, "-limit", "memory", "256MiB", "-limit", "map", "256MiB", "-limit", "disk", "512MiB", input, "-auto-orient", "-resize", output.size, "-background", "white", "-alpha", "remove", "-colorspace", "sRGB", "-strip", "-quality", "85", "JPEG:"+filepath.Join(dir, output.name))
+		// JPEG's native downsampling avoids needlessly caching all source pixels
+		// for high-resolution phone exports. The original dimensions were checked
+		// above, so this hint cannot bypass the 50 MP input limit.
+		_, err = s.run(ctx, dir, s.convert, "-limit", "memory", "256MiB", "-limit", "map", "256MiB", "-limit", "disk", "512MiB", "-define", "jpeg:size=2400x2400", input, "-auto-orient", "-resize", output.size, "-background", "white", "-alpha", "remove", "-colorspace", "sRGB", "-strip", "-quality", "85", "JPEG:"+filepath.Join(dir, output.name))
 		if err != nil {
 			return Image{}, decoderFailure(ctx, "convert", format, err)
 		}

@@ -303,3 +303,25 @@ func TestValidationReasonsAndPixelLimit(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestMaximumResolutionJPEG(t *testing.T) {
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(t.TempDir(), "50mp.jpeg")
+	if out, err := exec.Command(s.convert, "-size", "5000x10000", "gradient:", source).CombinedOutput(); err != nil {
+		t.Fatal(err, string(out))
+	}
+	raw, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	photo, err := s.Process(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if photo.Width != 1200 || photo.Height != 2400 || photo.ThumbnailWidth != 640 || photo.ThumbnailHeight != 640 {
+		t.Fatal(photo)
+	}
+}

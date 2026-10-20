@@ -61,3 +61,13 @@ Only safe stage/format/exit fields are logged. No decoder stderr/EXIF/bytes are 
 5. With two staging users, verify private/friends visibility, unfriend revocation,
    owner-only mutations and no-store full/thumbnail responses. Verify crop/cover
    changes preserve unsaved technical fields. No production deployment is included.
+
+## High-resolution JPEG follow-up
+
+A generated 50 MP JPEG additionally exhausted the unchanged native cache budget
+when decoded at full resolution. JPEG's existing native decoder size hint now
+requests 2400x2400 before conversion; original dimensions are still inspected
+without that hint and rejected above 50 MP. `TestMaximumResolutionJPEG` verifies
+successful processing exactly at the 50 MP boundary without raising cache/memory
+budgets. This also reduces work for iOS high-resolution JPEG exports. HEIF decoding
+continues through the existing pinned native codec and bounded resources.

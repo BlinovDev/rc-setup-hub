@@ -225,3 +225,6 @@ HTTP test also uploads/retries HEIF and its JPEG export under misleading multipa
 name/MIME metadata. These fixtures are generated/licensed, not personal photographs.
 They do not prove physical iPhone Safari behavior or every Apple HEIF variant.
 See AI/issue-14-investigation.md for evidence and the unexecuted staging checklist.
+`TestMaximumResolutionJPEG` also accepts a generated exact-50-MP JPEG under the
+unchanged memory/cache budgets using native JPEG downsampling after original
+source dimension validation; the separate 51.2 MP case remains rejected.
