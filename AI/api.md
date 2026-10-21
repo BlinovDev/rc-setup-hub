@@ -152,6 +152,15 @@ extension needs no migration/backfill; old records receive no defaults. Older cl
 must preserve the entire data document to avoid dropping fields on replacement; the
 companion frontend consumes the exact updated backend contract before using them.
 
+Either Shock also accepts optional piston {holes, hole_diameter_mm, notes} and seal
+{type, description}. All fields are independent. Hole count is a positive int32;
+diameter is finite and positive in mm without rounding. Piston notes are trimmed
+free text up to 10,000 characters; seal description is technical text up to 200;
+no null bytes. Seal type is o-ring/x-ring or null/omitted. Empty/null blocks and
+parents introduced solely by them are pruned; existing legacy empty shock/spring
+shapes stay unchanged. This additive schema-v1 extension needs no migration/backfill.
+Existing shock manufacturer/model/spring/oil values and their rules are unchanged.
+
 All sections and most technical fields are optional. Omitted/null optional
 numeric fields mean unknown and are omitted on output; **toe_deg: 0 is a real
 value preserved by pointer-backed Go structs**. Optional null sections/technical

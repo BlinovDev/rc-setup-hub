@@ -57,7 +57,7 @@ func TestVisibilityHTTP(t *testing.T) {
 	}
 	var setups []Setup
 	for i, visibility := range []Visibility{Public, Friends, Private} {
-		body := fmt.Sprintf(`{"title":"%s","visibility":"%s","data":{"rear_differential":{"type":"lsd","tuning_notes":"Differential settings"}}}`, visibility, visibility)
+		body := fmt.Sprintf(`{"title":"%s","visibility":"%s","data":{"rear_differential":{"type":"lsd","tuning_notes":"Differential settings"},"shocks":{"front":{"piston":{"holes":4,"hole_diameter_mm":1.2},"seal":{"type":"o-ring","description":"Seal product"}}}}}`, visibility, visibility)
 		setup := setupResponse(t, request(router, "POST", "/api/v1/setups", body, owner.cookie), 201)
 		setups = append(setups, setup)
 		if _, err := pool.Exec(ctx, `UPDATE setups SET created_at=$2::timestamptz WHERE id=$1`, setup.ID, fmt.Sprintf("2020-01-%02dT00:00:00Z", i+1)); err != nil {
@@ -106,7 +106,7 @@ func TestVisibilityHTTP(t *testing.T) {
 					}
 					if w.Code == 200 {
 						got := setupResponse(t, w, 200)
-						if got.ID != s.ID || got.OwnerID != owner.id || got.Data.RearDifferential == nil || got.Data.RearDifferential.TuningNotes != "Differential settings" {
+						if got.ID != s.ID || got.OwnerID != owner.id || got.Data.RearDifferential == nil || got.Data.RearDifferential.TuningNotes != "Differential settings" || got.Data.Shocks == nil || got.Data.Shocks.Front.Piston == nil || got.Data.Shocks.Front.Piston.Holes == nil || *got.Data.Shocks.Front.Piston.Holes != 4 {
 							t.Fatal("wrong setup")
 						}
 					}
