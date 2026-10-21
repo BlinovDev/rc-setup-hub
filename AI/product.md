@@ -1,162 +1,80 @@
-# Product and business rules
+# Shared enduring product rules
 
-This document is the compact current product truth for agents starting from a fresh chat or task. It describes user-visible behavior and invariants, not implementation history. When behavior changes, update this file in the same PR.
+This backend document owns shared RC Setup Hub business rules. The separate
+[frontend product](https://github.com/BlinovDev/rc-setup-hub-fe/blob/main/AI/product.md)
+owns client interaction rules; transport details belong to [API](api.md)/OpenAPI.
+Change this file only for an enduring product-rule change, per [workflow](workflow.md).
 
-## Product
+## Identity, catalog and setups
 
-RC Setup Hub is a web application for RC drift drivers to store, find, and share car setups. The POC targets a local drift community but should remain usable by a wider community without adding unrelated RC disciplines.
+- RC drift setups only; Google sign-in; stable Google subject identifies a user.
+  Users have unique case-insensitive nicknames/emails and optional avatars.
+- The backend owns HttpOnly sessions and authorization; no client auth tokens.
+  Public profiles/search expose application UUID, nickname/avatar, never email or
+  provider identity. Nickname discovery excludes the caller; no email search.
+- Admin is an environment email allowlist, not a database role. Backend-rendered
+  admin manages brands/models and minimal statistics/users; ordinary users cannot.
+- Active brands/models are selectable. A model's brand is immutable on edit.
+  Names are trimmed, case-insensitively unique (models within brand); Custom is a
+  client option, never a catalog row. NULL chassis means custom/unlisted/unspecified.
+  Existing setups retain historical display for inactive catalog entries.
+- Owners CRUD setups: title, optional chassis, visibility, structured schema-v1
+  suspension/shocks/electronics, optional notes and timestamps. Only owners write.
+  Optional numbers preserve unknown versus explicit zero; supplied data replaces
+  the whole technical document. Unsupported versions must not be silently reinterpreted.
 
-The user-facing application is a React frontend backed by a Go JSON API and PostgreSQL. Google is the only authentication provider. The backend also owns a small server-rendered admin area.
+## Visibility and friendship
 
-## Users and authentication
+| Authenticated viewer | Public | Friends | Private |
+| --- | --- | --- | --- |
+| Owner | Read | Read | Read |
+| Accepted friend | Read | Read | Deny |
+| Other / pending friend | Read | Deny | Deny |
 
-- A Google identity maps to one application user by stable Google subject.
-- An application user has an email, unique nickname and optional avatar.
-- Browser authentication is a backend-owned HttpOnly session cookie.
-- Frontend JavaScript never stores Google tokens or application session tokens.
-- Successful login returns the browser to the trusted configured frontend URL.
+Discovery returns public setups only, even for owners/friends. Owner lists show all;
+profile lists return only backend-authorized items. Inaccessible and missing detail
+are indistinguishable. Reads do not grant modification rights; no anonymous browsing.
 
-## Chassis catalog
+There is one pending/accepted relationship per unordered user pair; no self-friendship.
+Only the pending addressee accepts. Requester cancels, addressee rejects, either
+accepted participant removes. Pending grants nothing; removal revokes friends access.
 
-- Chassis brands and models are managed by admins.
-- Regular users can select active catalog entries but cannot create catalog entries.
-- A setup may have no chassis model. This represents Custom/unlisted/unspecified and is not a synthetic database catalog row.
-- Existing setups retain historical chassis display data even when catalog entries become inactive.
+## Optional arm spacing
 
-## Setups
+Each axle/arm independently has optional top/lower totals ahead of/behind the arm
+in vehicle direction, in mm, symmetric left/right. Finite nonnegative numbers retain
+zero/precision; either side can be unknown. Empty blocks/parents are omitted. No
+chassis defaults, asymmetry, shim calculator or schema-v1 backfill. Removal uses full
+technical-data replacement; unrelated edits preserve spacing and other measurements.
 
-Authenticated users can create, read, update and delete their own setups.
+## Optional photos and framing
 
-A setup contains:
-- title;
-- owner;
-- optional chassis model;
-- visibility;
-- structured technical data;
-- optional notes;
-- schema version;
-- timestamps.
+- Zero to ten photos separate from technical JSONB. Owner uploads/cover/delete/crop
+  only. Stable creation-time/UUID order, no captions/manual sorting. First upload is
+  cover; deleting cover selects oldest remaining; empty gallery has no cover.
+- Save the setup once before upload; failed uploads retain it and successful photos.
+  Explicit retries reuse a UUID request_id and identical bytes. Technical edits do
+  not change photos; image mutations persist independently.
+- All gallery/full/thumbnail reads require authentication and current setup visibility.
+  Visibility/friendship changes revoke later reads of known URLs. Private no-store
+  media is not a public static asset; already downloaded copies cannot be revoked.
+- Content-based JPEG/JPG, PNG, WebP and HEVC HEIC/HEIF still images only: at most
+  25 MiB and 50 megapixels. GIF/AVIF/BMP/TIFF/SVG/video are unsupported. First frame,
+  normalized orientation, stripped metadata, white transparency, JPEG full <=2400px
+  and thumbnail <=640px; no upscaling. Only processed images are stored privately.
+- Full images retain natural aspect and bytes across thumbnail edits. New thumbnails
+  are centered squares. Owners adjust/reset an integer square in normalized full
+  pixels; revision conflicts prevent stale overwrite. Failed/cancelled edits preserve
+  the saved frame. Legacy photos need no backfill/re-upload; old crops may be NULL.
+- Gallery and joined list/detail cover projections carry crop/revision. No per-item
+  metadata queries. A frontend placeholder is not a stored photo or count entry.
+- Rejections distinguish format/decoding, bytes, pixels and count. Resource termination
+  and timeouts are server failures; safe diagnostics never expose native stderr/EXIF.
 
-Technical data schema v1 covers suspension, shocks/springs and electronics. Optional numeric values preserve the distinction between omitted and explicit zero.
+## Scope boundaries
 
-Only the owner may modify or delete a setup.
-
-## Visibility
-
-Visibility values are:
-- `public`;
-- `friends`;
-- `private`.
-
-Access rules:
-- owner: can read all own setups;
-- accepted friend: can read another user's public and friends setups;
-- other authenticated user: can read another user's public setups only;
-- pending friendship does not grant friends visibility;
-- removing an accepted friendship removes friends-only access immediately;
-- inaccessible setup detail must not reveal whether the setup exists or is private.
-
-Public discovery/search returns public setups only. User profile setup lists are filtered by backend authorization for the current viewer.
-
-## Friendships
-
-- Users find other users by nickname, not email.
-- A friendship starts as a pending request.
-- Only the addressee can accept it.
-- Requester can cancel; addressee can reject; either participant can remove an accepted friendship.
-- There can be only one relationship for an unordered pair of users.
-- A user cannot friend themselves.
-
-## Public profiles
-
-Direct user profiles expose safe public identity only: application user ID, nickname and optional avatar. Email and Google/provider identity are not public profile data.
-
-## Admin
-
-Admin UI is part of the Go backend, not the React SPA.
-
-Admin authorization comes from the configured email allowlist, not a database role. Admin functionality includes chassis catalog management and minimal operational user/statistics views.
-
-## Deliberate non-goals unless explicitly requested
-
-Do not add by assumption:
-- comments, likes, ratings or favorites;
-- chat or notifications;
-- arbitrary attachments beyond the approved optional setup photos;
-- setup version history;
-- teams/groups;
-- multiple RC disciplines;
-- user-created chassis catalog entries;
-- normalized electronics/shock catalogs;
-- native-mobile-specific backend behavior;
-- offline synchronization.
-
-## Cross-repository contract
-
-The backend OpenAPI document is the machine-readable API contract. The frontend keeps a committed copy and generates transport types from it.
-
-When a feature changes the API:
-1. backend implementation, tests and OpenAPI change together;
-2. frontend copies the updated OpenAPI contract;
-3. generated frontend types are regenerated;
-4. frontend behavior and tests are updated.
-
-Do not make frontend and backend infer incompatible versions of a contract.
-
-## Optional arm spacer totals
-
-Each suspension axle independently supports optional top and lower arm spacing.
-Each block records total spacer thickness ahead of/behind the arm in vehicle
-direction (`front_mm`/`rear_mm`), in millimetres, symmetric across left/right.
-No block is required; no chassis defaults or shim calculations are applied.
-Finite nonnegative numbers preserve explicit zero and decimals without rounding.
-Omitted/null means unknown; either side can be known independently. Empty blocks
-and parents introduced solely for them are omitted. Removing a block uses full
-`data` replacement; unrelated edits retain all totals and other measurements.
-This is an additive schema-v1 extension with no backfill.
-
-## Setup photos (setup-photos-v1; Issue #5)
-
-Setups optionally have 0–10 photos, separate from schema-v1 technical data. Only
-the owner uploads, chooses a cover or deletes. The first successful upload is
-cover; choosing another replaces it; deleting cover selects the oldest remaining
-photo by creation timestamp/UUID. Zero photos means no cover. Stable upload order,
-no captions/manual sorting. Existing text/technical edits never change photos.
-
-Authenticated image/thumbnail/gallery reads inherit current setup visibility;
-public still requires login. Friendship removal/private visibility revokes later
-reads of known URLs. No-store responses prevent browser/shared cache reuse;
-already downloaded copies cannot be revoked. Full and all list/search responses
-include nullable joined cover metadata, without per-item metadata requests.
-
-JPEG/JPG, PNG, WebP and HEVC HEIC/HEIF still images are accepted by content.
-25 MiB/50 megapixel limit; first frame/image only for multi-image input, oriented
-and re-encoded metadata-free JPEG, <=2400px full/640px thumbnail without upscaling.
-Transparency is flattened on white. GIF/AVIF/BMP/TIFF/SVG/video/other attachments
-are unsupported. Server stores processed images only in private persistent media.
-The generated monochrome placeholder belongs only to frontend Issue #11, never
-the database or ten-photo count. Save a setup once before uploading against its
-ID; failed uploads retain that setup. Reuse a UUID request_id per file for retries.
-
-## Square thumbnail framing (setup-photo-ux-v2; Issue #10)
-
-New uploads have centered square JPEG thumbnails, min(short edge,640) pixels,
-without upscaling. Full photos keep their normalized natural aspect/dimensions
-and remain uncropped. Owners may adjust a thumbnail's square using integer x/y/size
-in server-normalized full-image pixels, or reset to center; this saves immediately,
-separately from setup fields. Cancel/skip in the future FE editor sends no mutation.
-Legacy photos remain unchanged until first adjustment and can be center-square
-presented by FE without re-upload/backfill. Crops persist across cover changes,
-reloads and every joined list projection. Revision checks prevent stale overwrites;
-failed applies retain the previous thumbnail. This explicitly supersedes the
-previous proportional-thumbnail/no-crop policy only for thumbnail framing, not
-full-photo editing. Existing photo limits, formats, privacy and cleanup remain.
-See AI/photo-ux-v2.md for the split roadmap and pending frontend/live QA gates.
-
-## Photo upload diagnostics (Issue #14)
-
-Photo validation distinguishes unsupported content, undecodable content, byte size,
-pixel dimensions and the ten-photo limit. Resource termination/timeouts are server
-failures rather than invalid-image claims. Content remains authoritative even when
-iOS exports HEIF as JPEG or filename/MIME metadata disagrees. The upload, pixel,
-count, orientation, metadata-stripping and private-media rules above are unchanged.
+Do not add by assumption: other disciplines, comments/likes/ratings/favorites,
+chat/notifications/teams, setup history, arbitrary attachments, user-created chassis
+catalog entries, normalized electronics/shock catalogs, offline synchronization or
+native-mobile-specific backend behavior. New scope needs explicit requirements and
+any changed [accepted decision](decisions.md), not an old roadmap phase.

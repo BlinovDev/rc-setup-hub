@@ -1,108 +1,72 @@
-# Feature delivery workflow
+# Delivery and documentation policy
 
-This document defines the intended lifecycle for AI-assisted feature work. GitHub is the durable source of task state; chat history is not.
+## Sources of truth
 
-## Source of truth
+| Question | Owner |
+| --- | --- |
+| Applicable instructions / context routing | Root and nested AGENTS.md; load only task-relevant docs/skills |
+| Implemented behavior, commands and storage | Current code, tests, migrations, package scripts and workflows |
+| Transport shapes/statuses | Backend [OpenAPI](../backend/api/openapi.yaml); frontend commits an exact copy and regenerates types |
+| Shared enduring product rules | Backend [product](product.md); frontend product/UI docs own client-only interaction rules |
+| Enduring decisions and rationale | Repository [decisions](decisions.md), linked to affected rules |
+| Approved task scope / acceptance criteria / dependencies | Owning GitHub Issue, with linked child issues for repository-specific work |
+| Root cause, implementation narrative, test evidence, SHA pairs and QA outcome | PR/Issue, not evergreen Markdown appendices |
+| Release operations and recovery | [Deployment](deployment.md) and [host runbook](../scripts/server/README.md) |
 
-For a new task, reconstruct context from:
-1. `AGENTS.md`;
-2. `AI/product.md`;
-3. `AI/decisions.md`;
-4. relevant architecture/API/testing docs;
-5. the GitHub Issue/PR for the feature;
-6. the current code.
+Code and machine-readable contracts describe implementation facts; they do not
+silently repeal accepted security/product decisions. If these disagree, identify
+the discrepancy and resolve it within approved scope; ask for a material product,
+authorization, data or compatibility decision instead of guessing. Historical
+[archives](archive/README.md) and chat history are not active requirements.
 
-Do not rely on a previous ChatGPT conversation being available.
+## Docs by exception
 
-## Feature lifecycle
+Update an evergreen document only when an enduring product rule, public contract,
+architecture decision, operational procedure or developer command changes. Edit
+its owning section; link to it elsewhere rather than copying the rule. API changes
+still require implementation/tests/OpenAPI together and frontend regeneration.
+Bug fixes, refactors and ordinary UI polish that restore existing rules may ship
+with **zero evergreen-doc changes**; explain unchanged invariants in the PR.
 
-```text
-idea
- -> validated specification
- -> GitHub Issue
- -> implementation branch / PR
- -> automated checks
- -> staging deployment
- -> QA
- -> approved merge to main
- -> production deployment
- -> smoke verification
-```
+Do not append phase reports, file inventories, test counts, incident narratives,
+commit hashes or session-specific pending status to product/API/testing docs.
+Put those in Issues/PRs. Preserve fixture provenance/licenses beside fixtures.
+No arbitrary line cap: keep unique actionable constraints and remove repetition.
 
-## Specification gate
+## Scope and implementation
 
-Before implementation, turn a feature request into explicit acceptance criteria. Identify:
-- user-visible behavior;
-- backend/API changes;
-- frontend changes;
-- authorization/business-rule impact;
-- data/migration impact;
-- test cases;
-- explicit out-of-scope behavior;
-- unresolved questions.
+Use approved acceptance criteria before implementation. A focused issue records
+the user problem, scope/exclusions, risks/dependencies and tests/QA. Existing explicit
+implementation authorization is sufficient; ask only about material ambiguity or
+scope expansion. For phased tasks follow the approved issue's gates, not the old POC
+roadmap. Work on a feature branch and create a PR against main; no opportunistic work.
 
-Do not guess through a material ambiguity. Ask before implementation when different answers would change business behavior, authorization, stored data, or API compatibility.
+Cross-repo features have one specification owner (normally a backend umbrella Issue
+for shared behavior) and linked BE/FE child issues with local acceptance deltas.
+Do not duplicate the whole specification in both repositories. Backend changes the
+contract first; FE consumes the exact feature-PR contract without requiring a merge,
+commits its copy/generated types, and links the backend PR. Both PRs name compatible
+exact SHAs and any merge/release order. One-sided changes select a compatible peer SHA.
 
-## Implementation rules
+Run [relevant checks](testing.md) and required CI at the current PR head. Missing,
+pending, cancelled or failed required checks are not green. Put evidence and
+limitations in the PR using the [template](../.github/pull_request_template.md).
+A self-check is not independent review. Do not claim a Cloud task/automation exists
+without a real returned identity and execution evidence.
 
-- Work on a feature branch and propose changes through a PR.
-- Keep scope tied to the approved acceptance criteria.
-- Update automated tests for behavior changes.
-- Update `AI/product.md` when product/business behavior changes.
-- Update `AI/decisions.md` when a durable architectural/product decision changes.
-- Update API/architecture/deployment docs when their contracts change.
-- Never commit credentials or production secrets.
-- Never deploy a feature branch directly as production.
+## Staging, merge and production gates
 
-For cross-repository features, keep the backend and frontend PRs linked in their descriptions and state the required merge/deploy order when order matters.
+Implementation complete, QA passed, merged and deployed are separate states.
+Green CI does not authorize merge or deployment. Staging is shared and explicit,
+not automatically replaced by every PR. Only the backend's manually dispatched
+[coordinator](../.github/workflows/deploy.yml) deploys an immutable BE/FE SHA pair.
+Record selected pair, health and QA evidence on linked PRs; preserve isolated
+runtime users/configuration/databases/media and backup/preflight/migration gates.
 
-## Staging and QA
-
-A successful implementation is not production approval.
-
-The intended automation should deploy validated feature work to a staging environment with isolated configuration and data. QA feedback belongs on the Issue/PR so a fresh agent can recover it without chat history.
-
-QA failure:
-- preserve the existing feature scope;
-- reproduce and fix the reported problem;
-- add/update a regression test where practical;
-- rerun checks;
-- redeploy staging for another QA pass.
-
-QA pass means the feature is eligible for the production approval gate; it does not itself authorize an agent to bypass that gate.
-
-## Production
-
-Production changes come from `main` after the configured approval/merge gate.
-
-Deployment automation should:
-- use production-specific secrets/configuration;
-- apply migrations safely when required;
-- deploy the application;
-- run health/smoke checks;
-- report failure clearly.
-
-Staging and production may share one physical server, but must use separate runtime configuration and separate databases. A staging process must never point at the production database.
-
-## Definition of done
-
-A feature is done only when:
-- acceptance criteria are satisfied;
-- relevant automated checks pass;
-- QA has passed when required;
-- documentation reflects changed product/contract behavior;
-- the approved change is merged to `main`;
-- production deployment and smoke checks succeed.
-
-
-## Concrete CI/CD implementation
-
-Both repositories run CI for pull requests and pushes to `main`. CI does not receive deployment credentials.
-
-Combined staging/production deployment is coordinated only by the backend repository's manually dispatched `.github/workflows/deploy.yml`. A release always selects one explicit backend ref and one explicit frontend ref, resolves both once to full SHAs, validates/builds that pair, and packages one combined release.
-
-Staging is a shared QA environment, so deployment is explicit rather than automatic for every PR update. Record the selected QA SHA pair on the related Issue/PRs.
-
-Production deployment is also explicit in V1. Merge accepted changes first, then deploy the resulting main-reachable SHA pair. Production is never deployed directly from an unmerged feature branch.
-
-See `AI/deployment.md` for GitHub Environment requirements, server protocol, migration/health behavior and recovery limitations.
+When separately authorized, staging QA exercises acceptance criteria and affected
+security/regression paths; failed QA preserves scope and requires fixes/rechecks.
+Only approved changes merged to both relevant main histories may reach production.
+Production is separately explicit, uses production configuration, migrations and
+health/smoke gates; no feature-branch production release, automatic rollback or
+in-flight deployment cancellation. Recovery is administrator-owned. Full operational
+requirements remain in [deployment](deployment.md), not this process summary.
