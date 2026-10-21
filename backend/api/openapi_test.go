@@ -76,7 +76,7 @@ func TestOpenAPIContract(t *testing.T) {
 			}
 		}
 	}
-	for _, name := range []string{"SetupPhoto", "User", "PublicProfile", "ChassisBrand", "ChassisModel", "Setup", "SetupDataV1", "RearDifferential", "DifferentialManufacturer", "Suspension", "AxleSuspension", "LinkLength", "Shocks", "Shock", "ShockPiston", "ShockSeal", "Spring", "Electronics", "SetupSearchItem", "SetupSearchChassis", "SetupSearchPage", "FriendshipRelationship", "FriendshipItem", "FriendshipList", "APIError"} {
+	for _, name := range []string{"SetupPhoto", "User", "PublicProfile", "ChassisBrand", "ChassisModel", "Setup", "SetupDataV1", "RearDifferential", "DifferentialManufacturer", "Suspension", "AxleSuspension", "LowerArmMount", "LowerArmMountManufacturers", "LinkLength", "Shocks", "Shock", "ShockPiston", "ShockSeal", "Spring", "Electronics", "SetupSearchItem", "SetupSearchChassis", "SetupSearchPage", "FriendshipRelationship", "FriendshipItem", "FriendshipList", "APIError"} {
 		if _, exists := contract.Components.Schemas[name]; !exists {
 			t.Errorf("missing schema %s", name)
 		}
