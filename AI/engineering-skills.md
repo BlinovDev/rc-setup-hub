@@ -1,9 +1,10 @@
-# AI Engineering Skills Foundation — Phase 1
+# Repository engineering skills
 
 This repository owns six instruction-only Codex skills under `.agents/skills/`.
 They supplement the existing AGENTS.md and AI documents; they do not replace any
-project decision, test gate, authorization or completion rule. No application,
-dependency, API, schema, CI workflow or infrastructure change is part of Phase 1.
+project decision, test gate, authorization or completion rule. The skills do not
+authorize application, dependency, API, schema or infrastructure changes outside
+an explicitly scoped task.
 
 ## Routing and role boundaries
 
@@ -115,12 +116,12 @@ fixture or later real authorized task, not an unreviewed application change here
 
 ### Verification status and Cloud limitations
 
-Phase 1 can verify files, links, provenance, license preservation and checker
+Static checks can verify files, links, provenance, license preservation and checker
 behavior locally. **Codex Cloud discovery, explicit/implicit invocation, independent
-review behavior and sandbox enforcement are NOT VERIFIED by those checks.** No
-Cloud task execution is available from this working session. The procedure above
-is the outstanding acceptance check in a fresh Cloud task; record real evidence
-before claiming it passes. No changes to Cloud environment setup are installed.
+review behavior and sandbox enforcement are NOT VERIFIED by those checks.** If
+Cloud task invocation is unavailable, report NOT RUN and use the procedure above
+in a fresh Cloud task; record actual evidence before claiming it passes. Static
+checks do not install or verify Cloud environment setup.
 
 Cloud shell/network, Docker/PostgreSQL, native photo decoders, ARM64 execution,
 Node/browser installations, physical-device QA and GitHub permissions depend on

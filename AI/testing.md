@@ -1,232 +1,82 @@
-# Testing strategy
+# Backend verification gates
 
-Testing is used as a progress gate for vibe-coded development.
-
-Every roadmap phase has a small observable outcome and tests that prove it.
-
-## Test layers
-
-### 1. Unit tests
-
-Use Go's standard `testing` package.
-
-Best targets:
-- setup JSON validation;
-- visibility decisions;
-- friendship state rules;
-- admin email allowlist parsing/checking;
-- request validation;
-- pagination/cursor helpers if introduced.
-
-Prefer table-driven tests.
-
-### 2. Repository integration tests
-
-Repository SQL must be tested against real PostgreSQL.
-
-Reason: this project depends on PostgreSQL-specific behavior:
-- JSONB;
-- UUID;
-- expression indexes;
-- constraints;
-- foreign keys;
-- `TIMESTAMPTZ`.
-
-Do not rely only on SQL mocks.
-
-Recommended implementation:
-- run PostgreSQL in Docker;
-- use `testcontainers-go` or a dedicated isolated test database;
-- apply real migrations before repository tests;
-- clean data between tests.
-
-The exact choice can be made in milestone 1/2. Favor the option that makes `go test ./...` repeatable for a developer with Docker running.
-
-### 3. HTTP tests
-
-Use `httptest`.
-
-Test:
-- status codes;
-- authentication requirements;
-- authorization;
-- malformed request handling;
-- response shape for critical endpoints.
-
-Do not require a real Google login for most handler tests. Wrap identity/session resolution behind a narrow boundary that tests can substitute.
-
-### 4. End-to-end smoke tests
-
-Add only after core API is implemented.
-
-Minimum automated/manual smoke path:
-1. login/test session;
-2. list chassis catalog;
-3. create setup;
-4. read own setup;
-5. make it public;
-6. find it through public search;
-7. create second user;
-8. send/accept friendship;
-9. switch setup to friends;
-10. friend can read it;
-11. unrelated user cannot;
-12. switch to private;
-13. only owner can read it.
-
-## Mandatory regression tests
-
-### Visibility matrix
-
-For each visibility:
-
-| Caller | public | friends | private |
-|---|---:|---:|---:|
-| owner | allow | allow | allow |
-| accepted friend | allow | allow | deny |
-| unrelated authenticated user | allow | deny | deny |
-
-This logic must have table-driven tests.
-
-### Friendship uniqueness
-
-Test:
-- A -> B pending succeeds;
-- another A -> B fails;
-- B -> A while A -> B exists fails;
-- self-request fails;
-- only B can accept A -> B.
-
-### Chassis catalog
-
-Test:
-- ordinary user cannot mutate catalog;
-- admin can create brand/model;
-- inactive model does not appear in regular selectable catalog;
-- an existing setup referencing an inactive model still renders correctly;
-- setup can use `chassis_model_id = NULL`.
-
-### Setup JSON
-
-Test:
-- `0` degrees survives encode/decode as a real value;
-- omitted degree remains omitted;
-- valid schema v1 persists and loads;
-- unsupported schema version is handled explicitly.
+Use the version in [go.mod](../backend/go.mod). Unit tests use Go testing/httptest;
+persistence and authenticated HTTP tests use real disposable migrated PostgreSQL
+through internal/database/dbtest, not SQL mocks or a live database. Google/OIDC is
+faked/local-signed, so normal automated tests do not require a Google account.
 
 ## Commands
 
-The final repository should converge on simple commands such as:
+For docs/instruction-only changes, run from repository root:
 
-```bash
-go test ./...
-go test -race ./...
+```sh
+python3 scripts/verify-docs.py
+python3 -m unittest discover -s scripts -p 'test_docs.py' -v
+python3 scripts/verify-engineering-skills.py
+python3 -m unittest discover -s scripts -p 'test_engineering_skills.py' -v
+git diff --check
 ```
 
-Later add a `Makefile` or task runner only if it meaningfully simplifies repeatable commands.
+For application changes run Backend CI's sequence from backend/ with Docker and
+native codecs available (full CI still runs for every PR):
 
-## Arm spacing regression coverage
+```sh
+go mod download
+go mod verify
+test -z "$(gofmt -l .)"
+sudo ../scripts/provision-photo-decoder.sh
+go test ./...
+go test -race ./...
+go build ./...
+git diff --exit-code -- go.mod go.sum
+```
 
-`TestArmSpacingNormalization`, `TestArmSpacingValidation` and
-`TestArmSpacingStrictDecode` cover legacy shapes, explicit zero, decimals, partial
-unknown values, null/empty blocks, parent pruning, all axle/arm/value positions,
-non-finite/negative values and strict unknown-field/numeric-string rejection.
-`TestArmSpacingHTTPPersistence` uses disposable migrated PostgreSQL through the
-existing dbtest helper: create/PATCH/detail/full lists and repository reads,
-actual JSONB 0/5.2, title-only preservation, removal/clearing, invalid writes,
-and legacy documents. API transport tests validate spacing DTOs and requests
-against the embedded OpenAPI; existing visibility/ownership tests remain required.
+Each isolated CI job must provision the pinned Ubuntu 24.04 decoder before Go
+photo tests; installation in another job/host is not enough. Missing codecs fail,
+never silently skip. Required jobs remain test, race and photo-arm64; the native
+ARM64 job runs internal/photos and CGO_ENABLED=0 Linux/ARM64 build. -short skips
+PostgreSQL integration, so cannot establish full correctness. If prerequisites are
+unavailable locally, report that and use current-head CI evidence, not a false pass.
 
-Run Backend CI commands from backend/: `go mod download`, `go mod verify`,
-`test -z "$(gofmt -l .)"`, `go test ./...`, `go test -race ./...`,
-`go build ./...`, `git diff --exit-code -- go.mod go.sum`. Go version comes from
-go.mod; Docker must be running for real PostgreSQL. `-short` skips integration
-tests and is not evidence of complete backend validation.
+Host/helper changes additionally run from repository root:
+`python3 -m unittest discover -s scripts/server -v`. This covers both environments'
+path rejection, isolation, strict-sandbox preflight, coherent backup before migration,
+fail-closed snapshots, journal redaction, candidate-health failure and production
+main-SHA gate; tests use temporary paths/mocks, never a live host.
 
-Paired frontend/live staging QA (including detail labels and 375px/desktop)
-requires separate deployment authorization and a compatible explicit BE/FE SHA
-pair. Verify 0/5.2, all independent blocks, decimals/partial unknowns, reopen,
-unrelated edit, removal/clearing, negative/malformed errors and existing setups.
+## Mandatory behavior coverage
 
-## Host deployment regression checks
+| Area | Required cases |
+| --- | --- |
+| Visibility | Product matrix; pending/unfriend revocation; identical missing/private 404; SQL filtering and authorization before protected decode |
+| Friendship | Self and duplicate/opposite unordered pairs; only addressee accepts; participant-only mutation and concurrency |
+| Catalog | Non-admin denial, active-only selection, inactive historical display, Custom/null, uniqueness |
+| Setup JSON | Legacy/schema versions; zero vs unknown; strict JSON, finite/positive constraints, null/empty pruning and full replacement |
+| Arm spacing | Both axles/arms/positions; decimals, partial/all-zero, removal/legacy/title-only preservation; real JSONB persistence and invalid writes |
+| Photo processing | Actual HEIF/JPEG/PNG/WebP, EXIF orientation, phone-resolution HEIF/JPEG, HEIF export/MIME-name mismatch; corrupt/unsupported, 25 MiB and 50 MP boundaries, no upscaling, stripped metadata, safe keys, resource/cancel failures |
+| Photo persistence | Receipts/idempotent retry/conflict, concurrent count/cover, lists without N+1, delete/cascade/outbox/restart and coherent populated DB+media restore |
+| Crops | Integer/bounds/overflow, portrait/square/landscape/tiny, exact normalized frame, no full-byte changes, revision retries/conflicts, locks/races, failure cleanup, orphan/version sweeping, all cover projections |
+| Transport/security | OpenAPI validity and representative DTO/request/status coverage; 401/origin/admin CSRF/owner checks, no-store/nosniff/current-authorized media, safe errors/no leaked keys |
 
-Run `python3 -m unittest discover -s scripts/server -v` from repository root.
-Backend CI runs this alongside Go checks. It verifies staging media path rejection,
-runtime/sandbox preflight, preflight+backup ordering before migrations, fail-closed
-snapshot behavior, candidate journal redaction and unchanged production hook
-selection. Tests use temporary paths and mocks; they never access live environments.
-Host QA must additionally run the exact ARM64 candidate's `--check-media` under the
-staging sandbox, verify a coherent snapshot/isolated restore, deploy the explicitly
-approved SHA pair and verify public staging/backend health and unchanged production.
+Keep behavior tests near their owner instead of copying a changing test-name inventory
+here. Fixture licenses/provenance remain beside fixtures. Include failure and nearby
+invariant cases for every behavior change; record failing-before/passing-after evidence
+only if actually reproduced. Packaging/link checks do not prove Cloud behavior.
 
-### Photo decoder provisioning in every CI job
+## Separate live QA
 
-Each GitHub Actions job has an isolated runner. The regular test, race and native
-ARM64 photo jobs must each run `sudo ../scripts/provision-photo-decoder.sh` from
-`backend/` before their Go tests. Installation in another job or on Hetzner does
-not provide `convert` to this runner. Keep Ubuntu 24.04 runner labels aligned with
-the supported pinned provisioning script; missing codecs must fail tests rather
-than skip photo coverage.
+After separately authorized staging deployment, record exact BE/FE SHAs, health and
+results in the owning PR/Issue. Exercise login, catalog, setup CRUD/zero/decimals,
+public discovery, direct profiles, friendship accept/remove and public/friends/private
+reads with two accounts. Changed photo/crop paths require original iPhone HEIF and
+rotated JPEG, one/ten/eleven photos, interrupted retry, crop/cover/delete/reload,
+unsaved technical-data preservation, known media URLs/unfriend and real resampling.
 
-## Square crop stage-2 checks (Issue #10)
+At 320/375/390/768/1280 and short landscape check overlap, focus, labels, keyboard and
+touch. Mocked browser/native fixture tests do not establish real device/OAuth/live QA.
+For host work also run the exact candidate --check-media as the runtime user under
+the strict sandbox and verify an isolated coherent DB+media restore, public health
+and unaffected peer environment. Recovery/deployment remains [explicit](deployment.md).
 
-TestCropBounds covers integer/bounds/zero/negative/overflow and odd center offsets.
-TestSquareCropNormalizedSourceAndPublication covers portrait 3:4/9:16, square,
-landscape 4:3/16:9, tiny images, exact colored frame selection, no-upscaling,
-full SHA256 preservation, failed/cancelled generation and orphan/version sweeping.
-Existing real JPEG EXIF orientation and HEIC/PNG/WebP processing checks now require
-square default thumbnails based on normalized full dimensions.
-TestCropPersistenceRetriesRacesAndCleanup uses migrated PostgreSQL for defaults,
-legacy proportional media, reset/round-trip/all list projections, idempotent retries,
-stale edits, two-frame concurrency, generation/SQL publication failures, unchanged
-full bytes, cover/technical preservation and crop/deletion serialization/cleanup.
-Photo HTTP tests exercise strict/missing/null/fraction/overflow/string/unknown
-request rejection, 401/403/non-owner checks, retries/409 and current thumbnail
-privacy for private/friends/public/unfriend; backup restore includes a committed
-crop/version directory. OpenAPI validates the endpoint, typed request/response and
-all cover transports. Required full/race/native ARM64 CI and host safety tests remain.
-
-Local short tests alone do not verify PostgreSQL or pinned decoder provisioning.
-Use the exact CI result on the PR as evidence for those gates if local Docker/codecs
-are unavailable. No missing decoder test may be silently skipped. FE roadmap and
-320/375/390/768/1280 browser matrix, physical touch/iPhone HEIC and live two-account
-staging QA are pending linked Issue #13; no deployment is authorized by Issue #10.
-
-Production host regression coverage reuses the storage/snapshot failure and
-redaction cases against the separate production module and checks resource
-isolation. Controller cases require preflight and coherent backup before migrations
-in both environments, retain the production main-SHA gate, and reject candidate
-activation on failed health. Native host preparation additionally runs the exact
-production candidate's `--check-media` as the runtime user under the strict
-sandbox and restores the encrypted matched snapshot into disposable resources.
-
-## Engineering skill foundation checks
-
-For repository-local instruction/provenance changes, run
-`python3 scripts/verify-engineering-skills.py` and
-`python3 -m unittest discover -s scripts -p 'test_engineering_skills.py' -v`
-from repository root. These validate packaging, not Codex runtime behavior.
-Fresh Cloud discovery/invocation smoke prompts and explicitly unverified capabilities
-are documented in `AI/engineering-skills.md`. Existing application verification
-requirements above remain unchanged.
-
-## iPhone upload rejection regression (Issue #14)
-
-`TestPhoneResolutionJPEG` generates a compressed 4284x5712 (24.47 MP) portrait
-JPEG. It fails on the original 64 MiB subprocess file ceiling and passes when
-temporary pixel-cache files use the existing 512 MiB disk budget. Output publication
-retains a separate 64 MiB ceiling. `TestHEIFOriginJPEGAndContentDetection` processes
-native HEIF and an actual JPEG export of the existing licensed HEIF fixture.
-`TestHEIFBrands` covers compatible brands and AVIF/malformed rejection.
-`TestValidationReasonsAndPixelLimit` covers empty/oversized/corrupt/unsupported,
-a real 51.2 MP JPEG and resource-failure classification; `TestPhotoFailureReasons`
-checks HTTP error mappings without leaking internals. The PostgreSQL-backed photo
-HTTP test also uploads/retries HEIF and its JPEG export under misleading multipart
-name/MIME metadata. These fixtures are generated/licensed, not personal photographs.
-They do not prove physical iPhone Safari behavior or every Apple HEIF variant.
-See AI/issue-14-investigation.md for evidence and the unexecuted staging checklist.
-`TestMaximumResolutionJPEG` also accepts a generated exact-50-MP JPEG under the
-unchanged memory/cache budgets using native JPEG downsampling after original
-source dimension validation; the separate 51.2 MP case remains rejected.
-`TestPhoneResolutionHEIF` processes the synthetic 24.47 MP HEVC HEIF fixture under
-the same native resource limits; provenance is recorded in testdata/README.md.
+For fresh context/skills use [context smoke](context-smoke.md) and
+[engineering skill smoke](engineering-skills.md); keep transcripts and limitations in PRs.

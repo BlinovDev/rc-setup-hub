@@ -101,62 +101,28 @@ After QA:
 
 Do not deploy an unmerged feature SHA to production.
 
-## Staging photo startup incident and host gates
+## Private media and host gates
 
-The 2026-10-12 staging candidate for backend
-`3de11f118f34ad5ddc6059e24825ea047512a67f` and frontend
-`8839c4ce7401e67201cab7313dd548abaaa5b966` exited before listening because
-`MEDIA_DIR` was absent. Migration 6 had already applied; the prior release stayed
-active. The cleanup message about an unloaded candidate unit was secondary.
-The VPS also lacked ImageMagick and writable-media sandbox configuration.
+The [host runbook](../scripts/server/README.md) owns administrator installation,
+separate runtime identities/private MEDIA_DIR paths, strict systemd writable mounts,
+nginx 26m API limit/120s read timeout, protected encryption keys and recovery.
+Provision codecs on the host from the selected backend's supported script; runner
+provisioning never prepares the VPS. Staging work cannot alter production resources.
 
-Administrator-managed host helper sources and staging-only photo prerequisites,
-coherent encrypted DB+media backups, diagnostics and recovery are now documented
-in [scripts/server/README.md](../scripts/server/README.md). Provision codecs from
-the **selected photo backend's** supported provisioning script; main revisions
-predating photos do not contain it. Actions provisioning never installs host
-packages. Keep production configuration/service/database/media untouched during
-staging work; this staging repair does not authorize or prepare production photos.
+Before backup/migrations, run the actual candidate --check-media as its runtime user
+inside the strict sandbox. Keep the main-history gate first for production. Candidate
+health uses separate temporary loopbacks (staging 18181, production 18180); failure
+must not switch active links/receipt and prints only bounded redacted diagnostics.
 
-Staging media is `/var/lib/international-drift-hub-staging/media`, runtime-owned
-0700, allowed explicitly under `ProtectSystem=strict`. The helper executes the
-packaged `--check-media` as `idh-staging` before migrations; candidate health still
-uses `127.0.0.1:18181`. Staging predeploy/daily snapshots now contain matching DB
-and media with decoder/schema/release metadata. Snapshot failure stops staging
-and leaves its mutation gate closed. Application/database rollback remains manual.
+Snapshots pair DB and private media, including baseline/full AND current/referenced
+thumbnail-version directories, schema/decoder/release metadata and integrity hashes.
+Never infer media inventory solely from storage_key or restore a DB-only photo backup.
+Predeploy/daily jobs share environment locks; successful snapshots verify decryption,
+hashes and dump listing before reopening traffic. Failure stays stopped/maintenance
+closed and blocks migrations/activation. Retain seven daily and 30-day predeploy sets.
+Verify an isolated populated DB/media restore before relying on recovery. No automatic
+DB rollback, secret sharing or weakened health gate. Preparing the same active binary's
+host prerequisites is separate from deploying a new SHA pair; both need authorization.
 
-### Crop version media (Issue #10)
-
-Migration 00007 introduces thumbnail-only version directories in the existing
-private MEDIA_DIR. The native decoder baseline and resource limits are unchanged.
-Coherent DB+media snapshots/restores must include both full/baseline directories and
-current/referenced thumbnail-only directories. Never infer media inventory solely
-from storage_key. Existing whole-directory snapshots include both; restore checks
-fail closed for missing referenced versions. Old versions go to the same durable
-cleanup outbox. No bulk rewrite, live server changes or deployment in this task.
-
-## Production photo host readiness (2026-10-15)
-
-Production needs its own prerequisites even when staging is already ready.
-The failed photo candidate exited with missing `MEDIA_DIR`; migrations 6 and 7
-were already applied, so readiness work must not roll back or recreate the DB.
-
-The controller now selects separate `production_media` and `staging_media` hooks.
-Production uses `/var/lib/international-drift-hub/media`, runtime identity
-`international-drift-hub`, its own protected environment/encryption key, existing
-production Compose database, and `/var/backups/international-drift-hub` snapshots.
-Its strict systemd sandbox grants only this media path write access. The actual
-candidate's `--check-media` runs as the production runtime user before backup or
-migration. The verified-main SHA gate still runs first and is unchanged.
-
-Production nginx uses the same documented 26m API upload limit/120s read timeout,
-a separate private body-temp directory and `/run/rc-hub-production-maintenance`
-gate. Predeploy and existing daily backup jobs use coherent encrypted DB+media
-snapshots with the production lock, seven daily sets and 30-day predeploy retention.
-A snapshot pauses only production API/auth/admin traffic and its backend, and
-reopens after the verified snapshot succeeds. Failure stays closed. No automatic
-DB rollback, secret sharing, weakened health checks or release activation is added.
-
-See [host helper instructions](../scripts/server/README.md) for administrator
-installation and recovery. Host preparation/restarting the same active binary is
-separate from deploying a new application SHA pair; deployment remains explicit.
+Past staging/production incidents and task-specific readiness reports remain in
+[Git history](archive/README.md) and their linked Issues/PRs, not release instructions.

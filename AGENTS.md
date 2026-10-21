@@ -1,60 +1,48 @@
-# RC Setup Hub — Codex instructions
+# RC Setup Hub — task router
 
-This repository is built incrementally. Keep changes small, testable, and easy to review.
+Read the task/Issue and [workflow](AI/workflow.md), then only the rows needed below.
+Inspect current code, tests and applicable nested AGENTS.md before editing. Do not
+load every AI document or historical roadmap. No prior chat context is required.
 
-## Read before changing code
+| Task | Context to load |
+| --- | --- |
+| Product rule / permission / feature | [Product](AI/product.md), relevant [decisions](AI/decisions.md) |
+| Go implementation / architecture | [backend instructions](backend/AGENTS.md), [architecture](AI/architecture.md), [development](AI/development.md) |
+| HTTP / auth / contract | [API](AI/api.md), [security boundary](AI/architecture.md#authentication-and-security), affected OpenAPI schemas/tests |
+| SQL / migration / media persistence | [Database](AI/database.md), affected migrations/repositories |
+| Checks / bug regression | [Testing](AI/testing.md), nearest existing tests |
+| Release / host / recovery | [Deployment](AI/deployment.md), [host runbook](scripts/server/README.md) |
+| Documentation / instructions | [Workflow](AI/workflow.md), [context smoke](AI/context-smoke.md); edit only affected sources |
 
-Start with `AI/main.md` and `AI/product.md`. For feature delivery or work that may reach staging/production, also read `AI/workflow.md`. Then read only the documents relevant to the task:
-- product/business rules: `AI/product.md`
-- feature delivery lifecycle: `AI/workflow.md`
-- architecture: `AI/architecture.md`
-- database: `AI/database.md`
-- API: `AI/api.md`
-- development rules: `AI/development.md`
-- testing: `AI/testing.md`
-- implementation sequence: `AI/roadmap.md`
-- accepted decisions: `AI/decisions.md`
+## Non-negotiable boundaries
 
-Do not silently change accepted decisions or business rules. If a task conflicts with `AI/decisions.md` or materially changes `AI/product.md`, make that change explicit in the specification/PR instead of guessing.
+- Implement only approved acceptance criteria; keep changes small and testable.
+- Preserve the single Go service, PostgreSQL/pgx, goose and typed schema-v1 JSONB;
+  explicit zero is not omitted. No ORM or speculative abstractions.
+- Preserve Google-only backend-owned HttpOnly sessions, exact credentialed CORS,
+  mutation-origin/admin CSRF checks, owner writes and visibility-filtered reads.
+  Never expose secrets, tokens, private data or raw database/decoder errors.
+- Preserve image formats/limits, private storage and coherent DB+media safety gates.
+- Backend owns [OpenAPI](backend/api/openapi.yaml). Cross-repo changes update it
+  first, then the frontend's committed copy/generated types; link both PRs.
+- Add/update tests for behavior changes. Report actual checks and missing tooling;
+  mocked/short tests are not full PostgreSQL, native ARM64 or physical/live QA.
+- Docs by exception: update one canonical source for an enduring change. An ordinary
+  fix/refactor with unchanged rules/contracts may have zero evergreen-doc changes.
+- Work on a branch; PR against main. Never merge, deploy or touch live systems
+  without explicit authorization. Green CI is not release approval.
 
-For new feature requests, treat GitHub Issue/PR state and repository docs as durable context. Do not rely on previous chat history being available.
+## Relevant engineering skill only
 
-## Development rules
+For authorized implementation read [rc-implement](.agents/skills/rc-implement/SKILL.md);
+for defect reproduction [rc-regression](.agents/skills/rc-regression/SKILL.md).
+Design/impact/review tasks select their corresponding skill from
+[engineering skills](AI/engineering-skills.md). Reviews are read-only; a self-check
+is not independent review. Skills do not authorize broader changes or releases.
 
-- For roadmap work, implement one roadmap step at a time.
-- For post-roadmap feature work, implement only the approved acceptance criteria.
-- Do not add features opportunistically.
-- Prefer simple code over generic abstractions.
-- Keep `cmd/server` limited to application wiring.
-- Domain logic belongs in the corresponding `internal/...` package.
-- Database access must not be mixed directly into HTTP handlers.
-- Validate API input at the boundary and domain invariants in the domain/service layer.
-- Add or update tests with every behavior change.
-- Run formatting and the relevant test suite before considering a task complete.
-- Never commit secrets or real credentials.
-- Do not replace PostgreSQL with another database.
-- Do not replace structured Go setup types with arbitrary `map[string]any`.
-- Update `AI/product.md` in the same PR when user-visible behavior or a business rule changes.
-- For cross-repository API changes, update backend OpenAPI first and keep the frontend PR linked.
+## Check entry points (repository root)
 
-## Completion rule
-
-A task is complete only when:
-1. implementation matches its acceptance criteria;
-2. relevant tests pass;
-3. no unrelated behavior was changed;
-4. documentation is updated when product behavior or a contract changed;
-5. staging/QA/production gates in `AI/workflow.md` are respected when applicable.
-
-When asked to implement a roadmap phase, first state which checklist items you will complete, then implement them and report the tests executed.
-
-## Repository engineering skills
-
-Use the relevant skill in `.agents/skills/` after the required project context above:
-`rc-implement` for authorized changes; `rc-architect` for design analysis;
-`rc-regression` for bug reproduction/tests; `rc-blast-radius` for impact analysis;
-`rc-review` for independent code review; `rc-thermo-review` for strict architecture review.
-Read the selected `SKILL.md`; explicit invocation uses `$skill-name`. Analysis/review
-skills are read-only. Skills supplement these instructions and AI decisions; they
-do not relax verification or authorize merges, deployment, or broad refactoring.
-Discovery checks, Cloud smoke prompts and upstream maintenance: `AI/engineering-skills.md`.
+Docs: `python3 scripts/verify-docs.py`; instruction/provenance changes also run
+`python3 scripts/verify-engineering-skills.py` and the tests in [testing](AI/testing.md).
+Go checks run from `backend/`; full commands/prerequisites are in that same doc.
+Use [local setup](backend/README.md) when a running service is actually needed.

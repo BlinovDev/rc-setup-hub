@@ -15,9 +15,9 @@ to replace these helpers or choose root command/filesystem arguments.
 
 Install these together from a reviewed revision using administrator SSH. Do not
 replace only the controller: it requires its accompanying module. Keep the old
-root-owned helper for recovery. Production does not call the staging preflight,
-coherent backup, writable-media or diagnostic hooks; its main-SHA gate, backup,
-configuration and services are unchanged. This is **not** production photo readiness.
+root-owned helper for recovery. Production uses its own production_media hooks and
+protected resources, never staging hooks. Install the complete reviewed helper set;
+staging preparation alone does not establish production photo readiness (see below).
 
 ## Staging host prerequisites
 
@@ -120,8 +120,8 @@ read application secrets. Backend CI runs them in addition to existing Go checks
 
 ## Production host preparation
 
-The earlier staging-only instructions above describe the initial repair. Production
-now has a separate `production_media.py`, installed root:root 0644 in the same
+Staging and production use separate resources/hooks. Production has a separate
+`production_media.py`, installed root:root 0644 in the same
 root-owned helper directory. Install it alongside the updated controller; do not
 replace or change the staging module. `production-backup.sh` is installed root:root
 0700 at `/srv/international-drift-hub/ops/backup-postgres.sh`, keeping the existing

@@ -42,13 +42,9 @@ then `driver`, keeping letters/digits/hyphens/underscores and replacing spaces w
 hyphens (up to 40 characters). A uniqueness collision adds a random suffix with
 bounded retries. No frontend onboarding is required; nickname remains editable.
 
-The HttpOnly, host-only rc_session cookie contains a signed opaque handle; user
-identity and 24-hour expiry are held in memory. Login rotates handles; logout
-revokes them. Restart loses sessions/flows. Google tokens are discarded, never
-sent to the frontend or stored in localStorage. Local localhost ports 5173/8080
-work with SameSite=Lax and Secure=false. Production HTTPS uses Secure=true;
-genuinely cross-site deployment requires SameSite=None with Secure and is subject
-to browser third-party-cookie policy. Mutation-origin checks and admin CSRF remain.
+Session lifetime/cookie, token validation, CSRF and origin rules are maintained in
+[architecture/security](architecture.md#authentication-and-security). All API calls
+remain authenticated and credentialed; token/provider internals are never public.
 
 ## Public user profile
 
@@ -94,7 +90,10 @@ state; pending grants nothing and deletion removes friends-only access.
 
 Client may show synthetic "Custom / not listed" and send chassis_model_id=null.
 There is no Custom database row. Inactive historical values remain attached to
-existing setups and remain readable/searchable.
+existing setups and remain readable/searchable. Admin catalog names are trimmed,
+1–100 Unicode characters without controls; Custom is reserved case-insensitively.
+Models require an active parent; brand_id is immutable on rename. Forms retain
+8 KiB limits, CSRF and 303 success redirects; duplicates 409, malformed 400, missing 404.
 
 ## Setup CRUD and lists
 
@@ -189,11 +188,8 @@ The frontend is a separate React application/repository and may live anywhere.
 Copy backend/api/openapi.yaml into the frontend repository's api/openapi.yaml,
 or obtain the same contract from a running backend at GET /openapi.yaml. Commit
 the frontend's own copy for reproducible TypeScript generation. Do not assume
-sibling checkouts. APP_URL is required for normal backend server startup and is
-independent of ALLOWED_ORIGINS. Successful Google login redirects to APP_URL;
-frontend requests send the backend HttpOnly session cookie with credentials.
-Frontend JavaScript never receives or stores Google tokens, backend auth tokens
-or session handles; the browser manages the HttpOnly cookie.
+sibling checkouts. Security/configuration remain in [architecture](architecture.md#authentication-and-security);
+frontend integration rules are owned by its API document.
 
 ## Arm spacing extension (arm-spacing-v1)
 
@@ -212,11 +208,6 @@ introduced solely for it. No rounding/defaults/calculations occur. PATCH still
 replaces supplied data in full; omit a block to remove it, omit/null one value
 to clear it while retaining its sibling. Omit top-level data for unrelated edits.
 Existing schema-v1 documents without spacing remain unchanged and need no defaults.
-
-Frontend Issue #9 in BlinovDev/rc-setup-hub-fe must copy the exact contract from
-this backend feature PR and regenerate transport types before paired QA. New
-frontend spacing writes require this backend; use an explicit compatible SHA pair.
-No merge/deploy is authorized by the implementation task.
 
 ## Setup photo APIs (Issue #5)
 
@@ -250,8 +241,7 @@ Setup and SetupSearchItem include cover_photo: SetupPhoto|null in the same joine
 query (including My setups and visible profile lists). Schema-v1 is unchanged.
 SetupPhoto exposes ID/setup ID, full/thumbnail dimensions, image/jpeg, is_cover,
 created_at and authenticated relative url/thumbnail_url. Generated storage keys
-and filesystem paths are never exposed. Gallery is a separate resource. Frontend
-Issue #11 must copy this backend feature PR's exact OpenAPI and regenerate types.
+and filesystem paths are never exposed. Gallery is a separate resource.
 Refresh gallery/detail/list/search cover state after immediate photo mutations.
 New frontend creation saves once, uploads against returned ID with per-file
 results/retry; never create a second setup due to image errors.
@@ -285,8 +275,6 @@ not-owned/deleted; 500 processing/storage/DB failure; 503 shared processor busy.
 Owner checks precede parsing/processing. Crop/cover/delete share the parent setup
 lock through generation/commit; deletion cannot resurrect media. GET privacy and
 no-store rules remain in force regardless of revision query or known URLs.
-Frontend Issue #13 must copy the exact implementation PR-head contract and generate
-types. Record the compatible BE/FE pair on linked PRs when FE is implemented.
 
 ## Photo upload error details (Issue #14)
 
