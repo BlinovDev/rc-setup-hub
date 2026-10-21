@@ -70,3 +70,6 @@ Production is separately explicit, uses production configuration, migrations and
 health/smoke gates; no feature-branch production release, automatic rollback or
 in-flight deployment cancellation. Recovery is administrator-owned. Full operational
 requirements remain in [deployment](deployment.md), not this process summary.
+
+Project ideas follow the [Inbox connection and approval gate](project-intake.md).
+Repository Issue auto-add and authenticated ChatGPT Project reads are separate capabilities.
