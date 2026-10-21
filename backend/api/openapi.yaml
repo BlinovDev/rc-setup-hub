@@ -1083,6 +1083,10 @@ components:
       type: object
       additionalProperties: false
       properties:
+        front_steering_knuckle:
+          anyOf:
+            - $ref: '#/components/schemas/SteeringKnuckle'
+            - type: "null"
         rear_differential:
           anyOf:
             - $ref: '#/components/schemas/RearDifferential'
@@ -1103,6 +1107,25 @@ components:
         null sections are omitted on output. Unknown fields are rejected on input.
         Explicit numeric zero is preserved; omitted/null optional numeric values are
         unknown. PATCH replaces this entire document, without a deep merge.
+    SteeringKnuckle:
+      type: object
+      additionalProperties: false
+      properties:
+        manufacturer_id:
+          type: [string, "null"]
+          format: uuid
+          description: Existing chassis brand UUID. New selections must exist and be active;
+            unchanged historical inactive references survive PATCH. Null/omitted is unknown.
+            Output UUID is canonical.
+        description:
+          type: [string, "null"]
+          maxLength: 200
+          pattern: '^[^\x00]*$'
+          description: Trimmed free-text part number/product description. Empty/null/omitted
+            is omitted. At most 200 Unicode characters without null bytes.
+      description: Optional front-only steering knuckle. Fields are independent; empty/null
+        blocks are omitted. Additive schema-v1 extension without migration or defaults.
+        No rear knuckle field. Supplied data replaces the entire technical document.
     RearDifferential:
       type: object
       additionalProperties: false
@@ -1462,6 +1485,12 @@ components:
       type: object
       additionalProperties: false
       properties:
+        front_steering_knuckle_manufacturer:
+          anyOf:
+            - $ref: '#/components/schemas/DifferentialManufacturer'
+            - type: "null"
+          description: Read-only joined historical brand display for data.front_steering_knuckle.manufacturer_id,
+            including inactive brands. Null when absent or unresolvable. Never accepted in writes.
         rear_differential_manufacturer:
           anyOf:
             - $ref: '#/components/schemas/DifferentialManufacturer'
@@ -1523,6 +1552,7 @@ components:
           type: string
           format: date-time
       required:
+        - front_steering_knuckle_manufacturer
         - rear_differential_manufacturer
         - cover_photo
         - id
