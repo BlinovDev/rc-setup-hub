@@ -38,6 +38,22 @@ func technical(value *string) error {
 }
 func finite(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }
 func normalizeData(data *DataV1) error {
+	if k := data.FrontSteeringKnuckle; k != nil {
+		if k.ManufacturerID != nil {
+			var id pgtype.UUID
+			if err := id.Scan(*k.ManufacturerID); err != nil || !id.Valid {
+				return invalid("front steering knuckle manufacturer_id must be a UUID")
+			}
+			canonical := id.String()
+			k.ManufacturerID = &canonical
+		}
+		if err := technical(&k.Description); err != nil {
+			return err
+		}
+		if k.ManufacturerID == nil && k.Description == "" {
+			data.FrontSteeringKnuckle = nil
+		}
+	}
 	if d := data.RearDifferential; d != nil {
 		if d.Type != nil && *d.Type != Gear && *d.Type != LSD && *d.Type != Ball && *d.Type != Spool {
 			return invalid("rear differential type must be gear, lsd, ball or spool")

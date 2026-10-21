@@ -42,11 +42,18 @@ type RearDifferential struct {
 	TuningNotes    string            `json:"tuning_notes,omitempty"`
 }
 
+// SteeringKnuckle describes the optional front-only component, independently of axle geometry.
+type SteeringKnuckle struct {
+	ManufacturerID *string `json:"manufacturer_id,omitempty"`
+	Description    string  `json:"description,omitempty"`
+}
+
 type DataV1 struct {
-	RearDifferential *RearDifferential `json:"rear_differential,omitempty"`
-	Suspension       *Suspension       `json:"suspension,omitempty"`
-	Shocks           *Shocks           `json:"shocks,omitempty"`
-	Electronics      *Electronics      `json:"electronics,omitempty"`
+	FrontSteeringKnuckle *SteeringKnuckle  `json:"front_steering_knuckle,omitempty"`
+	RearDifferential     *RearDifferential `json:"rear_differential,omitempty"`
+	Suspension           *Suspension       `json:"suspension,omitempty"`
+	Shocks               *Shocks           `json:"shocks,omitempty"`
+	Electronics          *Electronics      `json:"electronics,omitempty"`
 }
 type Suspension struct {
 	Front *AxleSuspension `json:"front,omitempty"`
@@ -118,26 +125,27 @@ type Electronics struct {
 	Radio string `json:"radio,omitempty"`
 }
 
-// DifferentialManufacturer is read-only catalog display, including inactive historical brands.
+// DifferentialManufacturer is the shared read-only brand display shape, including inactive historical brands.
 type DifferentialManufacturer struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
 type Setup struct {
-	RearDifferentialManufacturer *DifferentialManufacturer `json:"rear_differential_manufacturer"`
-	CoverPhoto                   *Photo                    `json:"cover_photo"`
-	ID                           string                    `json:"id"`
-	OwnerID                      string                    `json:"owner_id"`
-	ChassisModelID               *string                   `json:"chassis_model_id"`
-	Chassis                      *SearchChassis            `json:"chassis"`
-	Title                        string                    `json:"title"`
-	Visibility                   Visibility                `json:"visibility"`
-	Data                         DataV1                    `json:"data"`
-	Notes                        *string                   `json:"notes"`
-	SchemaVersion                int                       `json:"schema_version"`
-	CreatedAt                    time.Time                 `json:"created_at"`
-	UpdatedAt                    time.Time                 `json:"updated_at"`
+	FrontSteeringKnuckleManufacturer *DifferentialManufacturer `json:"front_steering_knuckle_manufacturer"`
+	RearDifferentialManufacturer     *DifferentialManufacturer `json:"rear_differential_manufacturer"`
+	CoverPhoto                       *Photo                    `json:"cover_photo"`
+	ID                               string                    `json:"id"`
+	OwnerID                          string                    `json:"owner_id"`
+	ChassisModelID                   *string                   `json:"chassis_model_id"`
+	Chassis                          *SearchChassis            `json:"chassis"`
+	Title                            string                    `json:"title"`
+	Visibility                       Visibility                `json:"visibility"`
+	Data                             DataV1                    `json:"data"`
+	Notes                            *string                   `json:"notes"`
+	SchemaVersion                    int                       `json:"schema_version"`
+	CreatedAt                        time.Time                 `json:"created_at"`
+	UpdatedAt                        time.Time                 `json:"updated_at"`
 }
 type CreateInput struct {
 	Title          string     `json:"title"`

@@ -51,19 +51,30 @@ func differentialManufacturerID(data DataV1) *string {
 	return data.RearDifferential.ManufacturerID
 }
 
+func steeringKnuckleManufacturerID(data DataV1) *string {
+	if data.FrontSteeringKnuckle == nil {
+		return nil
+	}
+	return data.FrontSteeringKnuckle.ManufacturerID
+}
+
 func (s *Service) validateDifferentialManufacturer(ctx context.Context, id *string) error {
+	return s.validateManufacturer(ctx, id, "rear differential")
+}
+
+func (s *Service) validateManufacturer(ctx context.Context, id *string, component string) error {
 	if id == nil {
 		return nil
 	}
 	brand, err := s.catalog.GetBrand(ctx, *id)
 	if errors.Is(err, chassis.ErrNotFound) || errors.Is(err, chassis.ErrInvalidID) {
-		return invalid("rear differential manufacturer must exist and be active")
+		return invalid(component + " manufacturer must exist and be active")
 	}
 	if err != nil {
 		return err
 	}
 	if !brand.IsActive {
-		return invalid("rear differential manufacturer must exist and be active")
+		return invalid(component + " manufacturer must exist and be active")
 	}
 	return nil
 }
@@ -80,6 +91,9 @@ func (s *Service) Create(ctx context.Context, ownerID string, input CreateInput)
 		return Setup{}, err
 	}
 	if err := s.validateDifferentialManufacturer(ctx, differentialManufacturerID(setup.Data)); err != nil {
+		return Setup{}, err
+	}
+	if err := s.validateManufacturer(ctx, steeringKnuckleManufacturerID(setup.Data), "front steering knuckle"); err != nil {
 		return Setup{}, err
 	}
 	return s.repo.Create(ctx, ownerID, setup)
@@ -154,6 +168,7 @@ func (s *Service) Patch(ctx context.Context, ownerID, id string, input PatchInpu
 	}
 	expected := setup.UpdatedAt
 	previousManufacturer := differentialManufacturerID(setup.Data)
+	previousKnuckleManufacturer := steeringKnuckleManufacturerID(setup.Data)
 	if input.Title.Present {
 		if err := requiredPatch("title", input.Title.Value); err != nil {
 			return Setup{}, err
@@ -189,6 +204,11 @@ func (s *Service) Patch(ctx context.Context, ownerID, id string, input PatchInpu
 	// Unchanged historical brands survive full-data edits, just like inactive chassis.
 	if manufacturer := differentialManufacturerID(setup.Data); !sameCatalogID(previousManufacturer, manufacturer) {
 		if err := s.validateDifferentialManufacturer(ctx, manufacturer); err != nil {
+			return Setup{}, err
+		}
+	}
+	if manufacturer := steeringKnuckleManufacturerID(setup.Data); !sameCatalogID(previousKnuckleManufacturer, manufacturer) {
+		if err := s.validateManufacturer(ctx, manufacturer, "front steering knuckle"); err != nil {
 			return Setup{}, err
 		}
 	}
