@@ -60,6 +60,7 @@ func TestLowerArmMountNormalization(t *testing.T) {
 		}
 	}
 	data := realisticData(t)
+	data.FrontSteeringKnuckle = &SteeringKnuckle{Description: "Front knuckle"}
 	data.Suspension.Front.LowerArmMount = &LowerArmMount{ManufacturerID: &id, Model: strings.Repeat("😀", 200), ConfigurationNotes: strings.Repeat("界", 10000)}
 	data.Suspension.Rear.LowerArmMount = &LowerArmMount{Model: "Rear part", ConfigurationNotes: "Rear notes"}
 	kind := Gear

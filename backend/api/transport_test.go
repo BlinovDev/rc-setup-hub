@@ -38,6 +38,8 @@ func TestTransportContract(t *testing.T) {
 	setup.Data.Suspension.Front.LowerArmMount = &setups.LowerArmMount{ManufacturerID: &id, Model: "Part #42", ConfigurationNotes: "Front inserts\nMount B"}
 	setup.Data.Suspension.Rear = &setups.AxleSuspension{LowerArmMount: &setups.LowerArmMount{Model: "Rear part"}}
 	setup.LowerArmMountManufacturers = &setups.LowerArmMountManufacturers{Front: &setups.DifferentialManufacturer{ID: id, Name: "Historical manufacturer"}}
+	setup.Data.FrontSteeringKnuckle = &setups.SteeringKnuckle{ManufacturerID: &id, Description: "Part #42\nAluminum"}
+	setup.FrontSteeringKnuckleManufacturer = &setups.DifferentialManufacturer{ID: id, Name: "Historical manufacturer"}
 	kind := setups.Gear
 	setup.RearDifferentialManufacturer = &setups.DifferentialManufacturer{ID: id, Name: "Manufacturer"}
 	setup.Data.RearDifferential = &setups.RearDifferential{Type: &kind, ManufacturerID: &id, Model: "Gear diff", TuningNotes: "Oil 10000\nTwo gears"}
@@ -52,6 +54,7 @@ func TestTransportContract(t *testing.T) {
 	legacy.Data = setups.DataV1{}
 	legacy.RearDifferentialManufacturer = nil
 	legacy.LowerArmMountManufacturers = nil
+	legacy.FrontSteeringKnuckleManufacturer = nil
 	photo := &setups.Photo{ID: id, SetupID: id, Width: 100, Height: 50, ThumbnailWidth: 100, ThumbnailHeight: 50, ContentType: "image/jpeg", IsCover: true, CreatedAt: now, URL: "/api/v1/setups/" + id + "/photos/" + id + "/image", ThumbnailURL: "/api/v1/setups/" + id + "/photos/" + id + "/thumbnail"}
 	photo.Crop = &photos.Crop{X: 25, Y: 0, Size: 50}
 	photo.ThumbnailRevision = 1

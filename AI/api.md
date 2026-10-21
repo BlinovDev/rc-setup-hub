@@ -321,3 +321,13 @@ Processor slot exhaustion maps to 503; termination/timeouts/invocation failures
 map to generic 500. Logs contain stage/format/exit status only, never raw decoder
 stderr, filename, image bytes, paths or EXIF. Reverse proxies may return non-JSON
 413 independently; the frontend should explain that request-size rejection.
+
+## Front steering knuckle
+
+Optional schema-v1 `front_steering_knuckle` contains independent `manufacturer_id`
+(existing chassis brand UUID) and trimmed `description` (part number/product text,
+max 200 Unicode characters, no null bytes). Empty/null blocks prune; no rear block,
+defaults or migration. New manufacturer selection requires an active brand;
+unchanged historical references survive full-data PATCH. Read-only
+`front_steering_knuckle_manufacturer` joins historical catalog names on detail/list
+and mutation responses, including inactive brands, without extra per-item lookups.

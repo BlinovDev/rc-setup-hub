@@ -72,6 +72,7 @@ func TestLowerArmMountHTTPPersistence(t *testing.T) {
 				return fmt.Sprintf(`{"suspension":{"%s":{"lower_arm_mount":%s}}}`, side, block)
 			}
 			data := realisticData(t)
+			data.FrontSteeringKnuckle = &SteeringKnuckle{Description: "Front knuckle"}
 			axle(data, side).LowerArmMount = &LowerArmMount{ManufacturerID: &brand.ID, Model: " Part #42 ", ConfigurationNotes: " Inserts A\nMount B "}
 			axle(data, otherSide).LowerArmMount = &LowerArmMount{ManufacturerID: &otherBrand.ID, Model: "Other axle", ConfigurationNotes: "Other config"}
 			axle(data, side).TopArmSpacing = &ArmSpacing{FrontMM: floatPtr(0), RearMM: floatPtr(5.23456789)}

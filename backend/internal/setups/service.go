@@ -51,6 +51,13 @@ func differentialManufacturerID(data DataV1) *string {
 	return data.RearDifferential.ManufacturerID
 }
 
+func steeringKnuckleManufacturerID(data DataV1) *string {
+	if data.FrontSteeringKnuckle == nil {
+		return nil
+	}
+	return data.FrontSteeringKnuckle.ManufacturerID
+}
+
 func lowerArmMountManufacturerIDs(data DataV1) [2]*string {
 	var result [2]*string
 	if data.Suspension == nil {
@@ -103,6 +110,9 @@ func (s *Service) Create(ctx context.Context, ownerID string, input CreateInput)
 		if err := s.validateManufacturer(ctx, id, []string{"front lower arm mount", "rear lower arm mount"}[i]); err != nil {
 			return Setup{}, err
 		}
+	}
+	if err := s.validateManufacturer(ctx, steeringKnuckleManufacturerID(setup.Data), "front steering knuckle"); err != nil {
+		return Setup{}, err
 	}
 	return s.repo.Create(ctx, ownerID, setup)
 }
@@ -176,6 +186,7 @@ func (s *Service) Patch(ctx context.Context, ownerID, id string, input PatchInpu
 	}
 	expected := setup.UpdatedAt
 	previousManufacturer := differentialManufacturerID(setup.Data)
+	previousKnuckleManufacturer := steeringKnuckleManufacturerID(setup.Data)
 	previousMountManufacturers := lowerArmMountManufacturerIDs(setup.Data)
 	if input.Title.Present {
 		if err := requiredPatch("title", input.Title.Value); err != nil {
@@ -220,6 +231,11 @@ func (s *Service) Patch(ctx context.Context, ownerID, id string, input PatchInpu
 			if err := s.validateManufacturer(ctx, manufacturer, []string{"front lower arm mount", "rear lower arm mount"}[i]); err != nil {
 				return Setup{}, err
 			}
+		}
+	}
+	if manufacturer := steeringKnuckleManufacturerID(setup.Data); !sameCatalogID(previousKnuckleManufacturer, manufacturer) {
+		if err := s.validateManufacturer(ctx, manufacturer, "front steering knuckle"); err != nil {
+			return Setup{}, err
 		}
 	}
 	return s.repo.UpdateOwned(ctx, ownerID, id, setup, expected)
