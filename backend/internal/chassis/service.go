@@ -120,3 +120,11 @@ func (s *Service) ActiveModels(ctx context.Context, brandID string) ([]Model, er
 	}
 	return s.repo.ActiveModels(ctx, brandID)
 }
+
+// GetBrand returns a catalog brand including inactive historical entries.
+func (s *Service) GetBrand(ctx context.Context, id string) (Brand, error) {
+	if err := validateID(id); err != nil {
+		return Brand{}, err
+	}
+	return s.repo.GetBrand(ctx, id)
+}

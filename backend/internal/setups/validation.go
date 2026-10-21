@@ -5,6 +5,8 @@ import (
 	"math"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type ValidationError struct{ Message string }
@@ -36,6 +38,29 @@ func technical(value *string) error {
 }
 func finite(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }
 func normalizeData(data *DataV1) error {
+	if d := data.RearDifferential; d != nil {
+		if d.Type != nil && *d.Type != Gear && *d.Type != LSD && *d.Type != Ball && *d.Type != Spool {
+			return invalid("rear differential type must be gear, lsd, ball or spool")
+		}
+		if d.ManufacturerID != nil {
+			var id pgtype.UUID
+			if err := id.Scan(*d.ManufacturerID); err != nil || !id.Valid {
+				return invalid("rear differential manufacturer_id must be a UUID")
+			}
+			canonical := id.String()
+			d.ManufacturerID = &canonical
+		}
+		if err := technical(&d.Model); err != nil {
+			return err
+		}
+		d.TuningNotes = strings.TrimSpace(d.TuningNotes)
+		if !validText(d.TuningNotes, 10000) {
+			return invalid("rear differential tuning_notes must contain at most 10000 characters without null bytes")
+		}
+		if d.Type == nil && d.ManufacturerID == nil && d.Model == "" && d.TuningNotes == "" {
+			data.RearDifferential = nil
+		}
+	}
 	if data.Suspension != nil {
 		removedEmptySpacing := false
 		for _, axleSlot := range []**AxleSuspension{&data.Suspension.Front, &data.Suspension.Rear} {

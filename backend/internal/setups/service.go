@@ -44,6 +44,30 @@ func (s *Service) validateChassis(ctx context.Context, id *string) error {
 	}
 	return nil
 }
+func differentialManufacturerID(data DataV1) *string {
+	if data.RearDifferential == nil {
+		return nil
+	}
+	return data.RearDifferential.ManufacturerID
+}
+
+func (s *Service) validateDifferentialManufacturer(ctx context.Context, id *string) error {
+	if id == nil {
+		return nil
+	}
+	brand, err := s.catalog.GetBrand(ctx, *id)
+	if errors.Is(err, chassis.ErrNotFound) || errors.Is(err, chassis.ErrInvalidID) {
+		return invalid("rear differential manufacturer must exist and be active")
+	}
+	if err != nil {
+		return err
+	}
+	if !brand.IsActive {
+		return invalid("rear differential manufacturer must exist and be active")
+	}
+	return nil
+}
+
 func (s *Service) Create(ctx context.Context, ownerID string, input CreateInput) (Setup, error) {
 	if input.Data == nil {
 		return Setup{}, invalid("data must be a schema-v1 JSON object")
@@ -53,6 +77,9 @@ func (s *Service) Create(ctx context.Context, ownerID string, input CreateInput)
 		return Setup{}, err
 	}
 	if err := s.validateChassis(ctx, setup.ChassisModelID); err != nil {
+		return Setup{}, err
+	}
+	if err := s.validateDifferentialManufacturer(ctx, differentialManufacturerID(setup.Data)); err != nil {
 		return Setup{}, err
 	}
 	return s.repo.Create(ctx, ownerID, setup)
@@ -109,7 +136,7 @@ func (s *Service) Delete(ctx context.Context, ownerID, id string) error {
 	}
 	return nil
 }
-func sameChassis(a, b *string) bool {
+func sameCatalogID(a, b *string) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}
@@ -126,6 +153,7 @@ func (s *Service) Patch(ctx context.Context, ownerID, id string, input PatchInpu
 		return Setup{}, err
 	}
 	expected := setup.UpdatedAt
+	previousManufacturer := differentialManufacturerID(setup.Data)
 	if input.Title.Present {
 		if err := requiredPatch("title", input.Title.Value); err != nil {
 			return Setup{}, err
@@ -148,7 +176,7 @@ func (s *Service) Patch(ctx context.Context, ownerID, id string, input PatchInpu
 		setup.Data = *input.Data.Value
 	}
 	if input.ChassisModelID.Present {
-		if !sameChassis(setup.ChassisModelID, input.ChassisModelID.Value) {
+		if !sameCatalogID(setup.ChassisModelID, input.ChassisModelID.Value) {
 			if err := s.validateChassis(ctx, input.ChassisModelID.Value); err != nil {
 				return Setup{}, err
 			}
@@ -157,6 +185,12 @@ func (s *Service) Patch(ctx context.Context, ownerID, id string, input PatchInpu
 	}
 	if err := normalize(&setup); err != nil {
 		return Setup{}, err
+	}
+	// Unchanged historical brands survive full-data edits, just like inactive chassis.
+	if manufacturer := differentialManufacturerID(setup.Data); !sameCatalogID(previousManufacturer, manufacturer) {
+		if err := s.validateDifferentialManufacturer(ctx, manufacturer); err != nil {
+			return Setup{}, err
+		}
 	}
 	return s.repo.UpdateOwned(ctx, ownerID, id, setup, expected)
 }

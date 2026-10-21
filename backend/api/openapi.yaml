@@ -1083,6 +1083,10 @@ components:
       type: object
       additionalProperties: false
       properties:
+        rear_differential:
+          anyOf:
+            - $ref: '#/components/schemas/RearDifferential'
+            - type: "null"
         suspension:
           anyOf:
             - $ref: '#/components/schemas/Suspension'
@@ -1099,6 +1103,33 @@ components:
         null sections are omitted on output. Unknown fields are rejected on input.
         Explicit numeric zero is preserved; omitted/null optional numeric values are
         unknown. PATCH replaces this entire document, without a deep merge.
+    RearDifferential:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: [string, "null"]
+          enum: [gear, lsd, ball, spool, null]
+          description: Optional rear differential type; null/omitted means unknown.
+        manufacturer_id:
+          type: [string, "null"]
+          format: uuid
+          description: Reference to the existing chassis brands catalog. New selections
+            must exist and be active. Unchanged historical inactive references are
+            retained on PATCH. Null/omitted means unknown; output UUID is canonical.
+        model:
+          type: [string, "null"]
+          maxLength: 200
+          description: Trimmed free text without null bytes; empty/null/omitted is omitted.
+        tuning_notes:
+          type: [string, "null"]
+          maxLength: 10000
+          description: Trimmed free-form tuning notes without null bytes. Empty/null/omitted
+            is omitted. No type-specific tuning fields are required.
+      description: Optional rear-only differential. All fields are independent and optional.
+        Empty or null blocks are omitted on output. Additive schema-v1 JSONB extension;
+        no default differential or migration/backfill. Supplied data still replaces
+        the complete technical document.
     Suspension:
       type: object
       additionalProperties: false
@@ -1370,10 +1401,28 @@ components:
       - created_at
       - url
       - thumbnail_url
+    DifferentialManufacturer:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+      required: [id, name]
+      description: Read-only historical brand display from the existing catalog.
     Setup:
       type: object
       additionalProperties: false
       properties:
+        rear_differential_manufacturer:
+          anyOf:
+            - $ref: '#/components/schemas/DifferentialManufacturer'
+            - type: "null"
+          description: Read-only joined display for data.rear_differential.manufacturer_id,
+            including inactive brands. Null when no manufacturer is selected or resolvable.
+            Never accepted in create or PATCH input.
         cover_photo:
           anyOf:
             - $ref: '#/components/schemas/SetupPhoto'
@@ -1428,6 +1477,7 @@ components:
           type: string
           format: date-time
       required:
+        - rear_differential_manufacturer
         - cover_photo
         - id
         - owner_id
