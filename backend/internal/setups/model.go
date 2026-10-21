@@ -25,10 +25,28 @@ var (
 	ErrUnsupportedSchema = errors.New("unsupported setup schema version")
 )
 
+// DifferentialType identifies a rear differential without prescribing its tuning controls.
+type DifferentialType string
+
+const (
+	Gear  DifferentialType = "gear"
+	LSD   DifferentialType = "lsd"
+	Ball  DifferentialType = "ball"
+	Spool DifferentialType = "spool"
+)
+
+type RearDifferential struct {
+	Type           *DifferentialType `json:"type,omitempty"`
+	ManufacturerID *string           `json:"manufacturer_id,omitempty"`
+	Model          string            `json:"model,omitempty"`
+	TuningNotes    string            `json:"tuning_notes,omitempty"`
+}
+
 type DataV1 struct {
-	Suspension  *Suspension  `json:"suspension,omitempty"`
-	Shocks      *Shocks      `json:"shocks,omitempty"`
-	Electronics *Electronics `json:"electronics,omitempty"`
+	RearDifferential *RearDifferential `json:"rear_differential,omitempty"`
+	Suspension       *Suspension       `json:"suspension,omitempty"`
+	Shocks           *Shocks           `json:"shocks,omitempty"`
+	Electronics      *Electronics      `json:"electronics,omitempty"`
 }
 type Suspension struct {
 	Front *AxleSuspension `json:"front,omitempty"`
@@ -99,19 +117,27 @@ type Electronics struct {
 	Gyro  string `json:"gyro,omitempty"`
 	Radio string `json:"radio,omitempty"`
 }
+
+// DifferentialManufacturer is read-only catalog display, including inactive historical brands.
+type DifferentialManufacturer struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 type Setup struct {
-	CoverPhoto     *Photo         `json:"cover_photo"`
-	ID             string         `json:"id"`
-	OwnerID        string         `json:"owner_id"`
-	ChassisModelID *string        `json:"chassis_model_id"`
-	Chassis        *SearchChassis `json:"chassis"`
-	Title          string         `json:"title"`
-	Visibility     Visibility     `json:"visibility"`
-	Data           DataV1         `json:"data"`
-	Notes          *string        `json:"notes"`
-	SchemaVersion  int            `json:"schema_version"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
+	RearDifferentialManufacturer *DifferentialManufacturer `json:"rear_differential_manufacturer"`
+	CoverPhoto                   *Photo                    `json:"cover_photo"`
+	ID                           string                    `json:"id"`
+	OwnerID                      string                    `json:"owner_id"`
+	ChassisModelID               *string                   `json:"chassis_model_id"`
+	Chassis                      *SearchChassis            `json:"chassis"`
+	Title                        string                    `json:"title"`
+	Visibility                   Visibility                `json:"visibility"`
+	Data                         DataV1                    `json:"data"`
+	Notes                        *string                   `json:"notes"`
+	SchemaVersion                int                       `json:"schema_version"`
+	CreatedAt                    time.Time                 `json:"created_at"`
+	UpdatedAt                    time.Time                 `json:"updated_at"`
 }
 type CreateInput struct {
 	Title          string     `json:"title"`

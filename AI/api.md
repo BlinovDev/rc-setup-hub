@@ -137,7 +137,20 @@ UUID/input 400; internal errors generic 500. Untrusted browser mutation origin 4
 Explicit reusable structures: SetupDataV1, Suspension (front/rear), AxleSuspension
 (camber_deg/caster_deg/toe_deg/link_lengths), LinkLength (name/length_mm), Shocks
 (front/rear), Shock (manufacturer/model/spring/oil_cst), Spring
-(manufacturer/color), Electronics (motor/esc/servo/gyro/radio).
+(manufacturer/color), Electronics (motor/esc/servo/gyro/radio), and optional
+rear_differential (type gear/lsd/ball/spool, manufacturer_id referencing the existing
+chassis brands catalog, model, tuning_notes). Differential fields are independent:
+model uses the 200-character technical limit; tuning notes are trimmed free text,
+max 10,000 characters, with no null bytes. Null/empty differential blocks are omitted.
+New manufacturer selections must exist and be active; an unchanged historical
+inactive reference survives PATCH, including full-data replacement. Full Setup responses
+include read-only rear_differential_manufacturer ({id,name} or null), joined once with
+no activation filter so historical names remain displayable; it is never stored in
+technical JSONB or accepted in requests. Clearing/removal
+uses null/omission in the replacement data document. This additive schema-v1 JSONB
+extension needs no migration/backfill; old records receive no defaults. Older clients
+must preserve the entire data document to avoid dropping fields on replacement; the
+companion frontend consumes the exact updated backend contract before using them.
 
 All sections and most technical fields are optional. Omitted/null optional
 numeric fields mean unknown and are omitted on output; **toe_deg: 0 is a real

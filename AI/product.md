@@ -19,7 +19,8 @@ Change this file only for an enduring product-rule change, per [workflow](workfl
   client option, never a catalog row. NULL chassis means custom/unlisted/unspecified.
   Existing setups retain historical display for inactive catalog entries.
 - Owners CRUD setups: title, optional chassis, visibility, structured schema-v1
-  suspension/shocks/electronics, optional notes and timestamps. Only owners write.
+  suspension/shocks/electronics/rear differential, optional notes and timestamps.
+  Only owners write.
   Optional numbers preserve unknown versus explicit zero; supplied data replaces
   the whole technical document. Unsupported versions must not be silently reinterpreted.
 
