@@ -107,12 +107,59 @@ type Shocks struct {
 	Front *Shock `json:"front,omitempty"`
 	Rear  *Shock `json:"rear,omitempty"`
 }
-type Shock struct {
-	Manufacturer string   `json:"manufacturer,omitempty"`
-	Model        string   `json:"model,omitempty"`
-	Spring       *Spring  `json:"spring,omitempty"`
-	OilCST       *float64 `json:"oil_cst,omitempty"`
+type SealType string
+
+const (
+	ORing SealType = "o-ring"
+	XRing SealType = "x-ring"
+)
+
+// ShockPiston describes independently optional piston measurements and tuning.
+type ShockPiston struct {
+	Holes          *int32   `json:"holes,omitempty"`
+	HoleDiameterMM *float64 `json:"hole_diameter_mm,omitempty"`
+	Notes          string   `json:"notes,omitempty"`
 }
+
+type ShockSeal struct {
+	Type        *SealType `json:"type,omitempty"`
+	Description string    `json:"description,omitempty"`
+}
+
+type Shock struct {
+	Piston       *ShockPiston `json:"piston,omitempty"`
+	Seal         *ShockSeal   `json:"seal,omitempty"`
+	Manufacturer string       `json:"manufacturer,omitempty"`
+	Model        string       `json:"model,omitempty"`
+	Spring       *Spring      `json:"spring,omitempty"`
+	OilCST       *float64     `json:"oil_cst,omitempty"`
+}
+
+// UnmarshalJSON retains explicit null hardware blocks until normalization can prune
+// their newly empty parents, without changing legacy empty shock documents.
+func (s *Shock) UnmarshalJSON(raw []byte) error {
+	type shock Shock
+	var decoded shock
+	if err := decodeStrict(bytes.NewReader(raw), &decoded); err != nil {
+		return err
+	}
+	var presence struct {
+		Piston json.RawMessage `json:"piston"`
+		Seal   json.RawMessage `json:"seal"`
+	}
+	if err := json.Unmarshal(raw, &presence); err != nil {
+		return err
+	}
+	*s = Shock(decoded)
+	if bytes.Equal(bytes.TrimSpace(presence.Piston), []byte("null")) {
+		s.Piston = &ShockPiston{}
+	}
+	if bytes.Equal(bytes.TrimSpace(presence.Seal), []byte("null")) {
+		s.Seal = &ShockSeal{}
+	}
+	return nil
+}
+
 type Spring struct {
 	Manufacturer string `json:"manufacturer,omitempty"`
 	Color        string `json:"color,omitempty"`

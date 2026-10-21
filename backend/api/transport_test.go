@@ -40,6 +40,13 @@ func TestTransportContract(t *testing.T) {
 	kind := setups.Gear
 	setup.RearDifferentialManufacturer = &setups.DifferentialManufacturer{ID: id, Name: "Manufacturer"}
 	setup.Data.RearDifferential = &setups.RearDifferential{Type: &kind, ManufacturerID: &id, Model: "Gear diff", TuningNotes: "Oil 10000\nTwo gears"}
+	holes := int32(4)
+	sealType := setups.XRing
+	diameter := 1.23456789
+	setup.Data.Shocks = &setups.Shocks{
+		Front: &setups.Shock{Manufacturer: "Existing brand", Model: "Existing model", Spring: &setups.Spring{Color: "Red"}, OilCST: &spacing, Piston: &setups.ShockPiston{Holes: &holes, HoleDiameterMM: &diameter, Notes: "Drilled piston"}, Seal: &setups.ShockSeal{Type: &sealType, Description: "Seal model"}},
+		Rear:  &setups.Shock{Piston: &setups.ShockPiston{HoleDiameterMM: &diameter}, Seal: &setups.ShockSeal{Description: "Custom seal description"}},
+	}
 	legacy := setup
 	legacy.Data = setups.DataV1{}
 	legacy.RearDifferentialManufacturer = nil

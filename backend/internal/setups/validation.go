@@ -126,7 +126,9 @@ func normalizeData(data *DataV1) error {
 		}
 	}
 	if data.Shocks != nil {
-		for _, shock := range []*Shock{data.Shocks.Front, data.Shocks.Rear} {
+		removedEmptyHardware := false
+		for _, slot := range []**Shock{&data.Shocks.Front, &data.Shocks.Rear} {
+			shock := *slot
 			if shock == nil {
 				continue
 			}
@@ -145,6 +147,17 @@ func normalizeData(data *DataV1) error {
 			if shock.OilCST != nil && (!finite(*shock.OilCST) || *shock.OilCST <= 0) {
 				return invalid("oil_cst must be greater than zero")
 			}
+			hadHardware := shock.Piston != nil || shock.Seal != nil
+			if err := normalizeShockHardware(shock); err != nil {
+				return err
+			}
+			if hadHardware && shock.Piston == nil && shock.Seal == nil && shock.Manufacturer == "" && shock.Model == "" && shock.Spring == nil && shock.OilCST == nil {
+				*slot = nil
+				removedEmptyHardware = true
+			}
+		}
+		if removedEmptyHardware && data.Shocks.Front == nil && data.Shocks.Rear == nil {
+			data.Shocks = nil
 		}
 	}
 	if data.Electronics != nil {
@@ -157,6 +170,36 @@ func normalizeData(data *DataV1) error {
 	}
 	return nil
 }
+func normalizeShockHardware(shock *Shock) error {
+	if p := shock.Piston; p != nil {
+		if p.Holes != nil && *p.Holes <= 0 {
+			return invalid("piston holes must be a positive integer")
+		}
+		if p.HoleDiameterMM != nil && (!finite(*p.HoleDiameterMM) || *p.HoleDiameterMM <= 0) {
+			return invalid("piston hole_diameter_mm must be a finite number greater than zero")
+		}
+		p.Notes = strings.TrimSpace(p.Notes)
+		if !validText(p.Notes, 10000) {
+			return invalid("piston notes must contain at most 10000 characters without null bytes")
+		}
+		if p.Holes == nil && p.HoleDiameterMM == nil && p.Notes == "" {
+			shock.Piston = nil
+		}
+	}
+	if seal := shock.Seal; seal != nil {
+		if seal.Type != nil && *seal.Type != ORing && *seal.Type != XRing {
+			return invalid("seal type must be o-ring or x-ring")
+		}
+		if err := technical(&seal.Description); err != nil {
+			return err
+		}
+		if seal.Type == nil && seal.Description == "" {
+			shock.Seal = nil
+		}
+	}
+	return nil
+}
+
 func requiredPatch(field string, value *string) error {
 	if value == nil {
 		return invalid(fmt.Sprintf("%s cannot be null", field))
