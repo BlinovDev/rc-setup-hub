@@ -1236,6 +1236,14 @@ components:
       type: object
       additionalProperties: false
       properties:
+        piston:
+          anyOf:
+            - $ref: '#/components/schemas/ShockPiston'
+            - type: "null"
+        seal:
+          anyOf:
+            - $ref: '#/components/schemas/ShockSeal'
+            - type: "null"
         manufacturer:
           type:
             - string
@@ -1261,6 +1269,44 @@ components:
           exclusiveMinimum: 0
           description: Optional viscosity in cSt. Must be positive when supplied.
             Null/omitted means unknown and is omitted on output.
+    ShockPiston:
+      type: object
+      additionalProperties: false
+      properties:
+        holes:
+          type: [integer, "null"]
+          format: int32
+          minimum: 1
+          maximum: 2147483647
+          description: Optional positive hole count. Null/omitted means unknown,
+            never zero; numeric strings and fractional JSON numbers are rejected.
+        hole_diameter_mm:
+          type: [number, "null"]
+          exclusiveMinimum: 0
+          description: Optional finite positive hole diameter in mm, without rounding.
+        notes:
+          type: [string, "null"]
+          maxLength: 10000
+          pattern: '^[^\x00]*$'
+          description: Trimmed free-form piston notes without null bytes. Empty/null/omitted text is omitted.
+      description: Independent optional fields on either shock axle. Empty/null blocks
+        are omitted; no default measurements or schema-v1 migration/backfill.
+    ShockSeal:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: [string, "null"]
+          enum: [o-ring, x-ring, null]
+          description: Optional seal type. Null/omitted means unknown; empty string is invalid.
+        description:
+          type: [string, "null"]
+          maxLength: 200
+          pattern: '^[^\x00]*$'
+          description: Trimmed free text identifying a specific product/model, without
+            null bytes. Empty/null/omitted text is omitted; type is not required.
+      description: Independent optional seal type and product description. Empty/null
+        blocks are omitted. Existing shock, spring and oil fields retain their meaning.
     Spring:
       type: object
       additionalProperties: false
