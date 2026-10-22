@@ -1169,6 +1169,10 @@ components:
       type: object
       additionalProperties: false
       properties:
+        lower_arm_mount:
+          anyOf:
+            - $ref: '#/components/schemas/LowerArmMount'
+            - type: "null"
         camber_deg:
           type:
             - number
@@ -1208,6 +1212,31 @@ components:
             - $ref: '#/components/schemas/ArmSpacing'
             - type: "null"
           description: Optional lower arm spacer totals, symmetric across left/right.
+    LowerArmMount:
+      type: object
+      additionalProperties: false
+      properties:
+        manufacturer_id:
+          type: [string, "null"]
+          format: uuid
+          description: Existing chassis brand UUID. New selections must exist and be active.
+            Unchanged historical inactive references on the same axle survive PATCH.
+            Null/omitted is unknown; output UUID is canonical.
+        model:
+          type: [string, "null"]
+          maxLength: 200
+          pattern: '^[^\x00]*$'
+          description: Trimmed free-text model/part number. Empty/null/omitted is omitted.
+        configuration_notes:
+          type: [string, "null"]
+          maxLength: 10000
+          pattern: '^[^\x00]*$'
+          description: Trimmed free-text configuration notes. Empty/null/omitted is omitted.
+      description: One optional descriptive lower arm mount configuration per axle.
+        All fields are independent. No separate mounts/inserts or adjustment geometry.
+        Strings use Unicode character limits and reject null bytes. Empty/null blocks
+        and newly empty parents are omitted without changing legacy empty axle shapes.
+        Additive schema-v1 JSONB extension; no defaults, migration or backfill.
     ArmSpacing:
       type: object
       additionalProperties: false
@@ -1481,10 +1510,31 @@ components:
           type: string
       required: [id, name]
       description: Read-only historical brand display from the existing catalog.
+    LowerArmMountManufacturers:
+      type: object
+      additionalProperties: false
+      properties:
+        front:
+          anyOf:
+            - $ref: '#/components/schemas/DifferentialManufacturer'
+            - type: "null"
+        rear:
+          anyOf:
+            - $ref: '#/components/schemas/DifferentialManufacturer'
+            - type: "null"
+      required: [front, rear]
+      description: Read-only joined historical brands for each axle's lower_arm_mount.
+        Includes inactive brands; an absent/unresolvable reference is null.
     Setup:
       type: object
       additionalProperties: false
       properties:
+        lower_arm_mount_manufacturers:
+          anyOf:
+            - $ref: '#/components/schemas/LowerArmMountManufacturers'
+            - type: "null"
+          description: Read-only historical catalog display; null when neither axle has
+            a resolvable manufacturer. Never stored in technical data or accepted in writes.
         front_steering_knuckle_manufacturer:
           anyOf:
             - $ref: '#/components/schemas/DifferentialManufacturer'
@@ -1552,6 +1602,7 @@ components:
           type: string
           format: date-time
       required:
+        - lower_arm_mount_manufacturers
         - front_steering_knuckle_manufacturer
         - rear_differential_manufacturer
         - cover_photo

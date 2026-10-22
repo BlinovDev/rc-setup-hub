@@ -78,13 +78,33 @@ func normalizeData(data *DataV1) error {
 		}
 	}
 	if data.Suspension != nil {
-		removedEmptySpacing := false
+		removedEmptyAxle := false
 		for _, axleSlot := range []**AxleSuspension{&data.Suspension.Front, &data.Suspension.Rear} {
 			axle := *axleSlot
 			if axle == nil {
 				continue
 			}
-			hadSpacing := axle.TopArmSpacing != nil || axle.LowerArmSpacing != nil
+			hadOptionalBlock := axle.TopArmSpacing != nil || axle.LowerArmSpacing != nil || axle.LowerArmMount != nil
+			if mount := axle.LowerArmMount; mount != nil {
+				if mount.ManufacturerID != nil {
+					var id pgtype.UUID
+					if err := id.Scan(*mount.ManufacturerID); err != nil || !id.Valid {
+						return invalid("lower arm mount manufacturer_id must be a UUID")
+					}
+					canonical := id.String()
+					mount.ManufacturerID = &canonical
+				}
+				if err := technical(&mount.Model); err != nil {
+					return err
+				}
+				mount.ConfigurationNotes = strings.TrimSpace(mount.ConfigurationNotes)
+				if !validText(mount.ConfigurationNotes, 10000) {
+					return invalid("lower arm mount configuration_notes must contain at most 10000 characters without null bytes")
+				}
+				if mount.ManufacturerID == nil && mount.Model == "" && mount.ConfigurationNotes == "" {
+					axle.LowerArmMount = nil
+				}
+			}
 			for _, spacing := range []**ArmSpacing{&axle.TopArmSpacing, &axle.LowerArmSpacing} {
 				if *spacing == nil {
 					continue
@@ -98,11 +118,11 @@ func normalizeData(data *DataV1) error {
 					*spacing = nil
 				}
 			}
-			// Prune parents introduced solely by empty spacing blocks; leave legacy documents alone.
-			if hadSpacing && axle.TopArmSpacing == nil && axle.LowerArmSpacing == nil &&
+			// Prune parents introduced solely by empty optional blocks; leave legacy documents alone.
+			if hadOptionalBlock && axle.LowerArmMount == nil && axle.TopArmSpacing == nil && axle.LowerArmSpacing == nil &&
 				axle.CamberDeg == nil && axle.CasterDeg == nil && axle.ToeDeg == nil && len(axle.LinkLengths) == 0 {
 				*axleSlot = nil
-				removedEmptySpacing = true
+				removedEmptyAxle = true
 				continue
 			}
 			for _, degree := range []*float64{axle.CamberDeg, axle.CasterDeg, axle.ToeDeg} {
@@ -121,7 +141,7 @@ func normalizeData(data *DataV1) error {
 				}
 			}
 		}
-		if removedEmptySpacing && data.Suspension.Front == nil && data.Suspension.Rear == nil {
+		if removedEmptyAxle && data.Suspension.Front == nil && data.Suspension.Rear == nil {
 			data.Suspension = nil
 		}
 	}

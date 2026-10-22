@@ -161,6 +161,16 @@ parents introduced solely by them are pruned; existing legacy empty shock/spring
 shapes stay unchanged. This additive schema-v1 extension needs no migration/backfill.
 Existing shock manufacturer/model/spring/oil values and their rules are unchanged.
 
+Each suspension axle also accepts independent optional `lower_arm_mount` fields:
+`manufacturer_id` (existing chassis brand UUID), `model` (trimmed 200-character
+part/model text), and `configuration_notes` (trimmed 10,000-character free text),
+without null bytes. One descriptive configuration per axle; no insert/geometry
+model. Empty/null blocks and parents introduced solely by them prune. New selection
+requires an active brand; unchanged historical references survive on the same axle.
+Read-only `lower_arm_mount_manufacturers` joins front/rear historical names once
+(including inactive brands), or null when neither resolves. Schema remains v1 with
+no migration/defaults; full-data replacement and compatibility requirements apply.
+
 All sections and most technical fields are optional. Omitted/null optional
 numeric fields mean unknown and are omitted on output; **toe_deg: 0 is a real
 value preserved by pointer-backed Go structs**. Optional null sections/technical

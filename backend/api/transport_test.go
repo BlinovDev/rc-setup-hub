@@ -35,6 +35,9 @@ func TestTransportContract(t *testing.T) {
 	spacing := 5.2
 	profile := users.PublicProfile{ID: id, Nickname: "Driver"}
 	setup := setups.Setup{ID: id, OwnerID: id, Title: "Track setup", Visibility: setups.Private, SchemaVersion: 1, CreatedAt: now, UpdatedAt: now, Data: setups.DataV1{Suspension: &setups.Suspension{Front: &setups.AxleSuspension{ToeDeg: &zero, TopArmSpacing: &setups.ArmSpacing{FrontMM: &zero, RearMM: &spacing}, LowerArmSpacing: &setups.ArmSpacing{RearMM: &zero}}}}}
+	setup.Data.Suspension.Front.LowerArmMount = &setups.LowerArmMount{ManufacturerID: &id, Model: "Part #42", ConfigurationNotes: "Front inserts\nMount B"}
+	setup.Data.Suspension.Rear = &setups.AxleSuspension{LowerArmMount: &setups.LowerArmMount{Model: "Rear part"}}
+	setup.LowerArmMountManufacturers = &setups.LowerArmMountManufacturers{Front: &setups.DifferentialManufacturer{ID: id, Name: "Historical manufacturer"}}
 	setup.Data.FrontSteeringKnuckle = &setups.SteeringKnuckle{ManufacturerID: &id, Description: "Part #42\nAluminum"}
 	setup.FrontSteeringKnuckleManufacturer = &setups.DifferentialManufacturer{ID: id, Name: "Historical manufacturer"}
 	kind := setups.Gear
@@ -50,6 +53,7 @@ func TestTransportContract(t *testing.T) {
 	legacy := setup
 	legacy.Data = setups.DataV1{}
 	legacy.RearDifferentialManufacturer = nil
+	legacy.LowerArmMountManufacturers = nil
 	legacy.FrontSteeringKnuckleManufacturer = nil
 	photo := &setups.Photo{ID: id, SetupID: id, Width: 100, Height: 50, ThumbnailWidth: 100, ThumbnailHeight: 50, ContentType: "image/jpeg", IsCover: true, CreatedAt: now, URL: "/api/v1/setups/" + id + "/photos/" + id + "/image", ThumbnailURL: "/api/v1/setups/" + id + "/photos/" + id + "/thumbnail"}
 	photo.Crop = &photos.Crop{X: 25, Y: 0, Size: 50}

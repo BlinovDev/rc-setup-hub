@@ -57,7 +57,7 @@ func TestVisibilityHTTP(t *testing.T) {
 	}
 	var setups []Setup
 	for i, visibility := range []Visibility{Public, Friends, Private} {
-		body := fmt.Sprintf(`{"title":"%s","visibility":"%s","data":{"front_steering_knuckle":{"description":"Front component"},"rear_differential":{"type":"lsd","tuning_notes":"Differential settings"},"shocks":{"front":{"piston":{"holes":4,"hole_diameter_mm":1.2},"seal":{"type":"o-ring","description":"Seal product"}}}}}`, visibility, visibility)
+		body := fmt.Sprintf(`{"title":"%s","visibility":"%s","data":{"front_steering_knuckle":{"description":"Front component"},"suspension":{"front":{"lower_arm_mount":{"model":"Front part"}},"rear":{"lower_arm_mount":{"configuration_notes":"Rear config"}}},"rear_differential":{"type":"lsd","tuning_notes":"Differential settings"},"shocks":{"front":{"piston":{"holes":4,"hole_diameter_mm":1.2},"seal":{"type":"o-ring","description":"Seal product"}}}}}`, visibility, visibility)
 		setup := setupResponse(t, request(router, "POST", "/api/v1/setups", body, owner.cookie), 201)
 		setups = append(setups, setup)
 		if _, err := pool.Exec(ctx, `UPDATE setups SET created_at=$2::timestamptz WHERE id=$1`, setup.ID, fmt.Sprintf("2020-01-%02dT00:00:00Z", i+1)); err != nil {

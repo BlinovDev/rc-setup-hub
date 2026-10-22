@@ -65,13 +65,22 @@ type ArmSpacing struct {
 	FrontMM *float64 `json:"front_mm,omitempty"`
 	RearMM  *float64 `json:"rear_mm,omitempty"`
 }
+
+// LowerArmMount is one descriptive mount configuration per axle, not an insert/geometry model.
+type LowerArmMount struct {
+	ManufacturerID     *string `json:"manufacturer_id,omitempty"`
+	Model              string  `json:"model,omitempty"`
+	ConfigurationNotes string  `json:"configuration_notes,omitempty"`
+}
+
 type AxleSuspension struct {
-	TopArmSpacing   *ArmSpacing  `json:"top_arm_spacing,omitempty"`
-	LowerArmSpacing *ArmSpacing  `json:"lower_arm_spacing,omitempty"`
-	CamberDeg       *float64     `json:"camber_deg,omitempty"`
-	CasterDeg       *float64     `json:"caster_deg,omitempty"`
-	ToeDeg          *float64     `json:"toe_deg,omitempty"`
-	LinkLengths     []LinkLength `json:"link_lengths,omitempty"`
+	LowerArmMount   *LowerArmMount `json:"lower_arm_mount,omitempty"`
+	TopArmSpacing   *ArmSpacing    `json:"top_arm_spacing,omitempty"`
+	LowerArmSpacing *ArmSpacing    `json:"lower_arm_spacing,omitempty"`
+	CamberDeg       *float64       `json:"camber_deg,omitempty"`
+	CasterDeg       *float64       `json:"caster_deg,omitempty"`
+	ToeDeg          *float64       `json:"toe_deg,omitempty"`
+	LinkLengths     []LinkLength   `json:"link_lengths,omitempty"`
 }
 
 // UnmarshalJSON tracks explicit null blocks so normalization can omit their empty parents.
@@ -85,6 +94,7 @@ func (a *AxleSuspension) UnmarshalJSON(raw []byte) error {
 	var presence struct {
 		Top   json.RawMessage `json:"top_arm_spacing"`
 		Lower json.RawMessage `json:"lower_arm_spacing"`
+		Mount json.RawMessage `json:"lower_arm_mount"`
 	}
 	if err := json.Unmarshal(raw, &presence); err != nil {
 		return err
@@ -95,6 +105,9 @@ func (a *AxleSuspension) UnmarshalJSON(raw []byte) error {
 	}
 	if bytes.Equal(bytes.TrimSpace(presence.Lower), []byte("null")) {
 		a.LowerArmSpacing = &ArmSpacing{}
+	}
+	if bytes.Equal(bytes.TrimSpace(presence.Mount), []byte("null")) {
+		a.LowerArmMount = &LowerArmMount{}
 	}
 	return nil
 }
@@ -172,27 +185,34 @@ type Electronics struct {
 	Radio string `json:"radio,omitempty"`
 }
 
-// DifferentialManufacturer is the shared read-only brand display shape, including inactive historical brands.
+// DifferentialManufacturer is the shared historical brand display shape, including inactive brands.
 type DifferentialManufacturer struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
+// LowerArmMountManufacturers contains joined historical names, never client input.
+type LowerArmMountManufacturers struct {
+	Front *DifferentialManufacturer `json:"front"`
+	Rear  *DifferentialManufacturer `json:"rear"`
+}
+
 type Setup struct {
-	FrontSteeringKnuckleManufacturer *DifferentialManufacturer `json:"front_steering_knuckle_manufacturer"`
-	RearDifferentialManufacturer     *DifferentialManufacturer `json:"rear_differential_manufacturer"`
-	CoverPhoto                       *Photo                    `json:"cover_photo"`
-	ID                               string                    `json:"id"`
-	OwnerID                          string                    `json:"owner_id"`
-	ChassisModelID                   *string                   `json:"chassis_model_id"`
-	Chassis                          *SearchChassis            `json:"chassis"`
-	Title                            string                    `json:"title"`
-	Visibility                       Visibility                `json:"visibility"`
-	Data                             DataV1                    `json:"data"`
-	Notes                            *string                   `json:"notes"`
-	SchemaVersion                    int                       `json:"schema_version"`
-	CreatedAt                        time.Time                 `json:"created_at"`
-	UpdatedAt                        time.Time                 `json:"updated_at"`
+	FrontSteeringKnuckleManufacturer *DifferentialManufacturer   `json:"front_steering_knuckle_manufacturer"`
+	LowerArmMountManufacturers       *LowerArmMountManufacturers `json:"lower_arm_mount_manufacturers"`
+	RearDifferentialManufacturer     *DifferentialManufacturer   `json:"rear_differential_manufacturer"`
+	CoverPhoto                       *Photo                      `json:"cover_photo"`
+	ID                               string                      `json:"id"`
+	OwnerID                          string                      `json:"owner_id"`
+	ChassisModelID                   *string                     `json:"chassis_model_id"`
+	Chassis                          *SearchChassis              `json:"chassis"`
+	Title                            string                      `json:"title"`
+	Visibility                       Visibility                  `json:"visibility"`
+	Data                             DataV1                      `json:"data"`
+	Notes                            *string                     `json:"notes"`
+	SchemaVersion                    int                         `json:"schema_version"`
+	CreatedAt                        time.Time                   `json:"created_at"`
+	UpdatedAt                        time.Time                   `json:"updated_at"`
 }
 type CreateInput struct {
 	Title          string     `json:"title"`

@@ -58,6 +58,19 @@ func steeringKnuckleManufacturerID(data DataV1) *string {
 	return data.FrontSteeringKnuckle.ManufacturerID
 }
 
+func lowerArmMountManufacturerIDs(data DataV1) [2]*string {
+	var result [2]*string
+	if data.Suspension == nil {
+		return result
+	}
+	for i, axle := range []*AxleSuspension{data.Suspension.Front, data.Suspension.Rear} {
+		if axle != nil && axle.LowerArmMount != nil {
+			result[i] = axle.LowerArmMount.ManufacturerID
+		}
+	}
+	return result
+}
+
 func (s *Service) validateDifferentialManufacturer(ctx context.Context, id *string) error {
 	return s.validateManufacturer(ctx, id, "rear differential")
 }
@@ -92,6 +105,11 @@ func (s *Service) Create(ctx context.Context, ownerID string, input CreateInput)
 	}
 	if err := s.validateDifferentialManufacturer(ctx, differentialManufacturerID(setup.Data)); err != nil {
 		return Setup{}, err
+	}
+	for i, id := range lowerArmMountManufacturerIDs(setup.Data) {
+		if err := s.validateManufacturer(ctx, id, []string{"front lower arm mount", "rear lower arm mount"}[i]); err != nil {
+			return Setup{}, err
+		}
 	}
 	if err := s.validateManufacturer(ctx, steeringKnuckleManufacturerID(setup.Data), "front steering knuckle"); err != nil {
 		return Setup{}, err
@@ -169,6 +187,7 @@ func (s *Service) Patch(ctx context.Context, ownerID, id string, input PatchInpu
 	expected := setup.UpdatedAt
 	previousManufacturer := differentialManufacturerID(setup.Data)
 	previousKnuckleManufacturer := steeringKnuckleManufacturerID(setup.Data)
+	previousMountManufacturers := lowerArmMountManufacturerIDs(setup.Data)
 	if input.Title.Present {
 		if err := requiredPatch("title", input.Title.Value); err != nil {
 			return Setup{}, err
@@ -205,6 +224,13 @@ func (s *Service) Patch(ctx context.Context, ownerID, id string, input PatchInpu
 	if manufacturer := differentialManufacturerID(setup.Data); !sameCatalogID(previousManufacturer, manufacturer) {
 		if err := s.validateDifferentialManufacturer(ctx, manufacturer); err != nil {
 			return Setup{}, err
+		}
+	}
+	for i, manufacturer := range lowerArmMountManufacturerIDs(setup.Data) {
+		if !sameCatalogID(previousMountManufacturers[i], manufacturer) {
+			if err := s.validateManufacturer(ctx, manufacturer, []string{"front lower arm mount", "rear lower arm mount"}[i]); err != nil {
+				return Setup{}, err
+			}
 		}
 	}
 	if manufacturer := steeringKnuckleManufacturerID(setup.Data); !sameCatalogID(previousKnuckleManufacturer, manufacturer) {
