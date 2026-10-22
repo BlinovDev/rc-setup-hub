@@ -38,6 +38,9 @@ func technical(value *string) error {
 }
 func finite(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }
 func normalizeData(data *DataV1) error {
+	if err := normalizeRunningGear(data); err != nil {
+		return err
+	}
 	if k := data.FrontSteeringKnuckle; k != nil {
 		if k.ManufacturerID != nil {
 			var id pgtype.UUID
