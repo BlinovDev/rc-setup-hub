@@ -50,8 +50,15 @@ func TestTransportContract(t *testing.T) {
 		Front: &setups.Shock{Manufacturer: "Existing brand", Model: "Existing model", Spring: &setups.Spring{Color: "Red"}, OilCST: &spacing, Piston: &setups.ShockPiston{Holes: &holes, HoleDiameterMM: &diameter, Notes: "Drilled piston"}, Seal: &setups.ShockSeal{Type: &sealType, Description: "Seal model"}},
 		Rear:  &setups.Shock{Piston: &setups.ShockPiston{HoleDiameterMM: &diameter}, Seal: &setups.ShockSeal{Description: "Custom seal description"}},
 	}
+	wheelOffset := int32(-4)
+	setup.Data.RunningGear = &setups.RunningGear{
+		Front: &setups.AxleRunningGear{Hex: &setups.Hex{OffsetMM: &zero}, Wheel: &setups.Wheel{ManufacturerID: &id, Model: "Wheel", OffsetMM: &wheelOffset}},
+		Rear:  &setups.AxleRunningGear{Hex: &setups.Hex{OffsetMM: &spacing}, Tire: &setups.Tire{ManufacturerID: &id, Model: "Tire"}},
+	}
+	setup.RunningGearManufacturers = &setups.RunningGearManufacturers{Front: &setups.AxleRunningGearManufacturers{Wheel: &setups.DifferentialManufacturer{ID: id, Name: "Historical wheel"}}, Rear: &setups.AxleRunningGearManufacturers{Tire: &setups.DifferentialManufacturer{ID: id, Name: "Historical tire"}}}
 	legacy := setup
 	legacy.Data = setups.DataV1{}
+	legacy.RunningGearManufacturers = nil
 	legacy.RearDifferentialManufacturer = nil
 	legacy.LowerArmMountManufacturers = nil
 	legacy.FrontSteeringKnuckleManufacturer = nil

@@ -19,20 +19,25 @@ func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: po
 // Both reads and mutation results use the same read-only historical projection.
 // No activation filter is used here; is_active only controls new selection.
 const displayColumns = `s.id::text,s.owner_id::text,s.chassis_model_id::text,s.title,s.visibility,s.data,s.notes,s.schema_version,s.created_at,s.updated_at,
- m.id::text,m.name,b.id::text,b.name, CASE WHEN cp.id IS NULL THEN NULL ELSE jsonb_build_object('id',cp.id,'setup_id',cp.setup_id,'width',cp.width,'height',cp.height,'thumbnail_width',cp.thumbnail_width,'thumbnail_height',cp.thumbnail_height,'crop',cp.crop,'thumbnail_revision',cp.thumbnail_revision,'is_cover',cp.is_cover,'created_at',cp.created_at,'content_type','image/jpeg','url','/api/v1/setups/'||cp.setup_id||'/photos/'||cp.id||'/image','thumbnail_url','/api/v1/setups/'||cp.setup_id||'/photos/'||cp.id||'/thumbnail?revision='||cp.thumbnail_revision) END,dm.id::text,dm.name,fm.id::text,fm.name,rm.id::text,rm.name,km.id::text,km.name`
+ m.id::text,m.name,b.id::text,b.name, CASE WHEN cp.id IS NULL THEN NULL ELSE jsonb_build_object('id',cp.id,'setup_id',cp.setup_id,'width',cp.width,'height',cp.height,'thumbnail_width',cp.thumbnail_width,'thumbnail_height',cp.thumbnail_height,'crop',cp.crop,'thumbnail_revision',cp.thumbnail_revision,'is_cover',cp.is_cover,'created_at',cp.created_at,'content_type','image/jpeg','url','/api/v1/setups/'||cp.setup_id||'/photos/'||cp.id||'/image','thumbnail_url','/api/v1/setups/'||cp.setup_id||'/photos/'||cp.id||'/thumbnail?revision='||cp.thumbnail_revision) END,dm.id::text,dm.name,fm.id::text,fm.name,rm.id::text,rm.name,km.id::text,km.name,fwm.id::text,fwm.name,ftm.id::text,ftm.name,rwm.id::text,rwm.name,rtm.id::text,rtm.name`
 const displayJoins = ` LEFT JOIN chassis_models m ON m.id=s.chassis_model_id LEFT JOIN chassis_brands b ON b.id=m.brand_id LEFT JOIN setup_photos cp ON cp.setup_id=s.id AND cp.is_cover
  LEFT JOIN chassis_brands dm ON dm.id::text=(s.data #>> '{rear_differential,manufacturer_id}')
  LEFT JOIN chassis_brands fm ON fm.id::text=(s.data #>> '{suspension,front,lower_arm_mount,manufacturer_id}')
  LEFT JOIN chassis_brands rm ON rm.id::text=(s.data #>> '{suspension,rear,lower_arm_mount,manufacturer_id}')
- LEFT JOIN chassis_brands km ON km.id::text=(s.data #>> '{front_steering_knuckle,manufacturer_id}')`
+ LEFT JOIN chassis_brands km ON km.id::text=(s.data #>> '{front_steering_knuckle,manufacturer_id}')
+ LEFT JOIN chassis_brands fwm ON fwm.id::text=(s.data #>> '{running_gear,front,wheel,manufacturer_id}')
+ LEFT JOIN chassis_brands ftm ON ftm.id::text=(s.data #>> '{running_gear,front,tire,manufacturer_id}')
+ LEFT JOIN chassis_brands rwm ON rwm.id::text=(s.data #>> '{running_gear,rear,wheel,manufacturer_id}')
+ LEFT JOIN chassis_brands rtm ON rtm.id::text=(s.data #>> '{running_gear,rear,tire,manufacturer_id}')`
 
 const columns = `id,owner_id,chassis_model_id,title,visibility,data,notes,schema_version,created_at,updated_at`
 
 func scan(row pgx.Row) (Setup, error) {
 	var s Setup
 	var raw, cover []byte
+	var gearIDs, gearNames [4]*string
 	var modelID, modelName, brandID, brandName, differentialBrandID, differentialBrandName, frontMountID, frontMountName, rearMountID, rearMountName, knuckleBrandID, knuckleBrandName *string
-	err := row.Scan(&s.ID, &s.OwnerID, &s.ChassisModelID, &s.Title, &s.Visibility, &raw, &s.Notes, &s.SchemaVersion, &s.CreatedAt, &s.UpdatedAt, &modelID, &modelName, &brandID, &brandName, &cover, &differentialBrandID, &differentialBrandName, &frontMountID, &frontMountName, &rearMountID, &rearMountName, &knuckleBrandID, &knuckleBrandName)
+	err := row.Scan(&s.ID, &s.OwnerID, &s.ChassisModelID, &s.Title, &s.Visibility, &raw, &s.Notes, &s.SchemaVersion, &s.CreatedAt, &s.UpdatedAt, &modelID, &modelName, &brandID, &brandName, &cover, &differentialBrandID, &differentialBrandName, &frontMountID, &frontMountName, &rearMountID, &rearMountName, &knuckleBrandID, &knuckleBrandName, &gearIDs[0], &gearNames[0], &gearIDs[1], &gearNames[1], &gearIDs[2], &gearNames[2], &gearIDs[3], &gearNames[3])
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Setup{}, ErrNotFound
 	}
@@ -50,6 +55,22 @@ func scan(row pgx.Row) (Setup, error) {
 		return Setup{}, errors.New("invalid stored setup data")
 	}
 	s.Data = *data
+	var gear RunningGearManufacturers
+	for i, slot := range []**AxleRunningGearManufacturers{&gear.Front, &gear.Rear} {
+		var axle AxleRunningGearManufacturers
+		for j, part := range []**DifferentialManufacturer{&axle.Wheel, &axle.Tire} {
+			n := i*2 + j
+			if gearIDs[n] != nil && gearNames[n] != nil {
+				*part = &DifferentialManufacturer{ID: *gearIDs[n], Name: *gearNames[n]}
+			}
+		}
+		if axle.Wheel != nil || axle.Tire != nil {
+			*slot = &axle
+		}
+	}
+	if gear.Front != nil || gear.Rear != nil {
+		s.RunningGearManufacturers = &gear
+	}
 	if knuckleBrandID != nil && knuckleBrandName != nil {
 		s.FrontSteeringKnuckleManufacturer = &DifferentialManufacturer{ID: *knuckleBrandID, Name: *knuckleBrandName}
 	}

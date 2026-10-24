@@ -48,7 +48,38 @@ type SteeringKnuckle struct {
 	Description    string  `json:"description,omitempty"`
 }
 
+type RunningGear struct {
+	Front *AxleRunningGear `json:"front,omitempty"`
+	Rear  *AxleRunningGear `json:"rear,omitempty"`
+}
+type AxleRunningGear struct {
+	Hex   *Hex   `json:"hex,omitempty"`
+	Wheel *Wheel `json:"wheel,omitempty"`
+	Tire  *Tire  `json:"tire,omitempty"`
+}
+type Hex struct {
+	OffsetMM *float64 `json:"offset_mm,omitempty"`
+}
+type Wheel struct {
+	ManufacturerID *string `json:"manufacturer_id,omitempty"`
+	Model          string  `json:"model,omitempty"`
+	OffsetMM       *int32  `json:"offset_mm,omitempty"`
+}
+type Tire struct {
+	ManufacturerID *string `json:"manufacturer_id,omitempty"`
+	Model          string  `json:"model,omitempty"`
+}
+type RunningGearManufacturers struct {
+	Front *AxleRunningGearManufacturers `json:"front"`
+	Rear  *AxleRunningGearManufacturers `json:"rear"`
+}
+type AxleRunningGearManufacturers struct {
+	Wheel *DifferentialManufacturer `json:"wheel"`
+	Tire  *DifferentialManufacturer `json:"tire"`
+}
 type DataV1 struct {
+	RunningGear *RunningGear `json:"running_gear,omitempty"`
+
 	FrontSteeringKnuckle *SteeringKnuckle  `json:"front_steering_knuckle,omitempty"`
 	RearDifferential     *RearDifferential `json:"rear_differential,omitempty"`
 	Suspension           *Suspension       `json:"suspension,omitempty"`
@@ -198,6 +229,7 @@ type LowerArmMountManufacturers struct {
 }
 
 type Setup struct {
+	RunningGearManufacturers         *RunningGearManufacturers   `json:"running_gear_manufacturers"`
 	FrontSteeringKnuckleManufacturer *DifferentialManufacturer   `json:"front_steering_knuckle_manufacturer"`
 	LowerArmMountManufacturers       *LowerArmMountManufacturers `json:"lower_arm_mount_manufacturers"`
 	RearDifferentialManufacturer     *DifferentialManufacturer   `json:"rear_differential_manufacturer"`

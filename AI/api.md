@@ -331,3 +331,16 @@ defaults or migration. New manufacturer selection requires an active brand;
 unchanged historical references survive full-data PATCH. Read-only
 `front_steering_knuckle_manufacturer` joins historical catalog names on detail/list
 and mutation responses, including inactive brands, without extra per-item lookups.
+
+
+Running gear is optional schema-v1 `data.running_gear.front|rear`: independent
+`hex.offset_mm` (finite signed double), `wheel.{manufacturer_id,model,offset_mm}`
+(signed int32 whole millimetres), and `tire.{manufacturer_id,model}`. Hex has no
+width. Numeric zero survives; empty/null components and parents are omitted.
+Models are trimmed, at most 200 Unicode characters, without NUL. Manufacturers
+reuse chassis brands; new selections must be active, unchanged historical IDs
+survive only on the same axle/component. Read-only `running_gear_manufacturers`
+joins current historical names (including inactive brands) outside JSONB.
+No migration/version bump is needed for additive optional fields; deploy backend
+support before clients write them. Old strict backends cannot decode new fields,
+and old clients replacing the entire data document can discard them.

@@ -1079,10 +1079,118 @@ components:
         - id
         - name
       description: Active catalog selection value; no synthetic Custom record exists.
+    RunningGear:
+      type: object
+      additionalProperties: false
+      properties:
+        front:
+          anyOf:
+            - $ref: '#/components/schemas/AxleRunningGear'
+            - type: "null"
+        rear:
+          anyOf:
+            - $ref: '#/components/schemas/AxleRunningGear'
+            - type: "null"
+      description: Independent optional components per axle. Empty/null blocks and parents
+        are omitted. Additive schema-v1 extension without defaults or migration.
+    AxleRunningGear:
+      type: object
+      additionalProperties: false
+      properties:
+        hex:
+          anyOf:
+            - $ref: '#/components/schemas/Hex'
+            - type: "null"
+        wheel:
+          anyOf:
+            - $ref: '#/components/schemas/Wheel'
+            - type: "null"
+        tire:
+          anyOf:
+            - $ref: '#/components/schemas/Tire'
+            - type: "null"
+    Hex:
+      type: object
+      additionalProperties: false
+      properties:
+        offset_mm:
+          type: [number, "null"]
+          format: double
+          description: Independent finite signed offset in millimetres; zero is preserved.
+            No width field or application-specific magnitude bound.
+    Wheel:
+      type: object
+      additionalProperties: false
+      properties:
+        manufacturer_id:
+          type: [string, "null"]
+          format: uuid
+          description: Existing chassis brand UUID. New selections must exist and be active.
+            Unchanged inactive references on the same axle/component survive PATCH.
+            Null/omitted is unknown; output UUID is canonical.
+        model:
+          type: [string, "null"]
+          maxLength: 200
+          pattern: '^[^\x00]*$'
+          description: Trimmed free text. Empty/null/omitted is omitted.
+        offset_mm:
+          type: [integer, "null"]
+          format: int32
+          minimum: -2147483648
+          maximum: 2147483647
+          description: Independent signed whole-millimetre wheel offset. Zero is preserved.
+            Bounds reflect integer storage, not an assumed RC component range.
+    Tire:
+      type: object
+      additionalProperties: false
+      properties:
+        manufacturer_id:
+          type: [string, "null"]
+          format: uuid
+          description: Existing chassis brand UUID. New selections must exist and be active.
+            Unchanged inactive references on the same axle/component survive PATCH.
+            Null/omitted is unknown; output UUID is canonical.
+        model:
+          type: [string, "null"]
+          maxLength: 200
+          pattern: '^[^\x00]*$'
+          description: Trimmed free text. Empty/null/omitted is omitted.
+    AxleRunningGearManufacturers:
+      type: object
+      additionalProperties: false
+      properties:
+        wheel:
+          anyOf:
+            - $ref: '#/components/schemas/DifferentialManufacturer'
+            - type: "null"
+        tire:
+          anyOf:
+            - $ref: '#/components/schemas/DifferentialManufacturer'
+            - type: "null"
+      required: [wheel, tire]
+    RunningGearManufacturers:
+      type: object
+      additionalProperties: false
+      properties:
+        front:
+          anyOf:
+            - $ref: '#/components/schemas/AxleRunningGearManufacturers'
+            - type: "null"
+        rear:
+          anyOf:
+            - $ref: '#/components/schemas/AxleRunningGearManufacturers'
+            - type: "null"
+      required: [front, rear]
+      description: Read-only joined historical brands including inactive entries.
+        An absent/unresolvable component or entirely unresolved axle is null.
     SetupDataV1:
       type: object
       additionalProperties: false
       properties:
+        running_gear:
+          anyOf:
+            - $ref: '#/components/schemas/RunningGear'
+            - type: "null"
         front_steering_knuckle:
           anyOf:
             - $ref: '#/components/schemas/SteeringKnuckle'
@@ -1529,6 +1637,12 @@ components:
       type: object
       additionalProperties: false
       properties:
+        running_gear_manufacturers:
+          anyOf:
+            - $ref: '#/components/schemas/RunningGearManufacturers'
+            - type: "null"
+          description: Read-only historical catalogue display; null when no reference resolves.
+            Never stored in data or accepted in writes.
         lower_arm_mount_manufacturers:
           anyOf:
             - $ref: '#/components/schemas/LowerArmMountManufacturers'
@@ -1602,6 +1716,7 @@ components:
           type: string
           format: date-time
       required:
+        - running_gear_manufacturers
         - lower_arm_mount_manufacturers
         - front_steering_knuckle_manufacturer
         - rear_differential_manufacturer
