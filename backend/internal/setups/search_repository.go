@@ -1,9 +1,6 @@
 package setups
 
-import (
-	"context"
-	"encoding/json"
-)
+import "context"
 
 // searchPublic filters visibility in SQL and returns one joined summary query.
 // It never selects or decodes data/notes, and activation flags do not affect history.
@@ -14,7 +11,7 @@ func (r *Repository) searchPublic(ctx context.Context, params searchParameters) 
 		cursorID = params.cursor.ID
 	}
 	rows, err := r.pool.Query(ctx, `SELECT s.id::text,s.title,s.visibility,s.chassis_model_id::text,s.schema_version,s.created_at,s.updated_at,
- u.id::text,u.nickname,u.avatar_url,m.name,b.id::text,b.name, CASE WHEN cp.id IS NULL THEN NULL ELSE jsonb_build_object('id',cp.id,'setup_id',cp.setup_id,'width',cp.width,'height',cp.height,'thumbnail_width',cp.thumbnail_width,'thumbnail_height',cp.thumbnail_height,'crop',cp.crop,'thumbnail_revision',cp.thumbnail_revision,'is_cover',cp.is_cover,'created_at',cp.created_at,'content_type','image/jpeg','url','/api/v1/setups/'||cp.setup_id||'/photos/'||cp.id||'/image','thumbnail_url','/api/v1/setups/'||cp.setup_id||'/photos/'||cp.id||'/thumbnail?revision='||cp.thumbnail_revision) END
+ u.id::text,u.nickname,u.avatar_url,m.name,b.id::text,b.name, `+coverPhotoJSON+`
  FROM setups s JOIN users u ON u.id=s.owner_id
  LEFT JOIN chassis_models m ON m.id=s.chassis_model_id
  LEFT JOIN chassis_brands b ON b.id=m.brand_id LEFT JOIN setup_photos cp ON cp.setup_id=s.id AND cp.is_cover
@@ -41,7 +38,7 @@ func (r *Repository) searchPublic(ctx context.Context, params searchParameters) 
 			item.Chassis = &SearchChassis{ModelID: *item.ChassisModelID, ModelName: *modelName, BrandID: *brandID, BrandName: *brandName}
 		}
 		if cover != nil {
-			if err := json.Unmarshal(cover, &item.CoverPhoto); err != nil {
+			if item.CoverPhoto, err = decodeCoverPhoto(cover); err != nil {
 				return nil, err
 			}
 		}
