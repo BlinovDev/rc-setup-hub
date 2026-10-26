@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 	"time"
@@ -21,6 +22,13 @@ func (s *Service) EnablePhotos(store *photos.Store) {
 }
 func (s *Service) ReconcilePhotos(ctx context.Context) error {
 	return s.repo.reconcilePhotos(ctx, s.photos)
+}
+
+// cleanupPhotos keeps request work bounded; the worker retries the durable queue.
+func (s *Service) cleanupPhotos(ctx context.Context) {
+	if _, err := s.repo.cleanupPhotoDeletions(ctx, s.photos, ""); err != nil {
+		slog.Warn("photo cleanup deferred; queued deletions retained")
+	}
 }
 func (s *Service) uploadPhoto(ctx context.Context, ownerID, setupID, requestID string, raw []byte) (Photo, error) {
 	digestBytes := sha256.Sum256(raw)
@@ -184,7 +192,7 @@ func (h *Handler) photoMutation(w http.ResponseWriter, r *http.Request, remove b
 	}
 	if remove {
 		// Queue remains durable if filesystem cleanup fails; worker retries.
-		_ = h.service.ReconcilePhotos(r.Context())
+		h.service.cleanupPhotos(r.Context())
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(204)
 		return
