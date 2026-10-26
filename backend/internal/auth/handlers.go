@@ -26,33 +26,49 @@ type Handler struct {
 	origins       []string
 	backendOrigin string
 	appURL        string
+	publicReads   *publicReadLimits
 }
 
 func NewHandler(c config.Auth, provider Provider, service *users.Service) *Handler {
 	redirect, _ := url.Parse(c.GoogleRedirectURL)
 	return &Handler{provider: provider, users: service, sessions: NewSessions(c), origins: c.AllowedOrigins,
-		appURL: c.AppURL.String(), backendOrigin: redirect.Scheme + "://" + redirect.Host}
+		appURL: c.AppURL.String(), publicReads: newPublicReadLimits(), backendOrigin: redirect.Scheme + "://" + redirect.Host}
 }
 func (h *Handler) Register(r chi.Router, apiRoutes ...func(chi.Router)) {
+	h.RegisterWithPublic(r, nil, apiRoutes...)
+}
+
+// RegisterWithPublic gives only explicitly registered GET routes optional identity.
+// Protected callbacks and account routes always retain RequireUser/origin checks.
+func (h *Handler) RegisterWithPublic(r chi.Router, publicRoutes []func(chi.Router), apiRoutes ...func(chi.Router)) {
 	r.Get("/auth/google", h.login)
 	r.Get("/auth/google/callback", h.callback)
 	r.Route("/api/v1", func(r chi.Router) {
 		// Empty allowlists must not use chi/cors' default wildcard behavior.
 		if len(h.origins) > 0 {
 			r.Use(cors.Handler(cors.Options{AllowedOrigins: h.origins,
-				AllowedMethods: []string{"GET", "PATCH", "POST", "PUT", "DELETE", "OPTIONS"}, AllowedHeaders: []string{"Content-Type"}, AllowCredentials: true}))
+				AllowedMethods: []string{"GET", "PATCH", "POST", "PUT", "DELETE", "OPTIONS"}, AllowedHeaders: []string{"Content-Type"}, ExposedHeaders: []string{"Retry-After", "X-Robots-Tag"}, AllowCredentials: true}))
 		}
-		r.Use(h.RequireUser)
-		r.Use(h.checkOrigin)
-		r.Post("/auth/logout", func(w http.ResponseWriter, r *http.Request) {
-			h.sessions.Logout(w, r)
-			w.WriteHeader(http.StatusNoContent)
+		r.Group(func(r chi.Router) {
+			r.Use(h.OptionalUser)
+			r.Use(h.publicReads.guard)
+			for _, register := range publicRoutes {
+				register(r)
+			}
 		})
-		r.Get("/me", func(w http.ResponseWriter, r *http.Request) { httpjson.Write(w, 200, currentUser(r)) })
-		r.Patch("/me", h.updateNickname)
-		for _, register := range apiRoutes {
-			register(r)
-		}
+		r.Group(func(r chi.Router) {
+			r.Use(h.RequireUser)
+			r.Use(h.checkOrigin)
+			r.Post("/auth/logout", func(w http.ResponseWriter, r *http.Request) {
+				h.sessions.Logout(w, r)
+				w.WriteHeader(http.StatusNoContent)
+			})
+			r.Get("/me", func(w http.ResponseWriter, r *http.Request) { httpjson.Write(w, 200, currentUser(r)) })
+			r.Patch("/me", h.updateNickname)
+			for _, register := range apiRoutes {
+				register(r)
+			}
+		})
 	})
 }
 func equal(a, b string) bool { return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1 }
@@ -119,17 +135,33 @@ func CurrentUser(r *http.Request) (users.User, bool) {
 
 // RequireUser resolves an existing session and returns 401 when authentication is absent.
 func (h *Handler) RequireUser(next http.Handler) http.Handler {
+	return h.resolveUser(next, true)
+}
+
+// OptionalUser treats missing/invalid/expired sessions as guests, never DB failures.
+func (h *Handler) OptionalUser(next http.Handler) http.Handler {
+	return h.resolveUser(next, false)
+}
+func (h *Handler) resolveUser(next http.Handler, required bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id, err := h.sessions.UserID(r)
 		if err != nil {
-			httpjson.Error(w, 401, "authentication required")
+			if required {
+				httpjson.Error(w, 401, "authentication required")
+			} else {
+				next.ServeHTTP(w, r)
+			}
 			return
 		}
 		user, err := h.users.Get(r.Context(), id)
 		if err != nil {
 			if errors.Is(err, users.ErrNotFound) {
 				h.sessions.Logout(w, r)
-				httpjson.Error(w, 401, "authentication required")
+				if required {
+					httpjson.Error(w, 401, "authentication required")
+				} else {
+					next.ServeHTTP(w, r)
+				}
 				return
 			}
 			httpjson.Error(w, 500, "profile unavailable")

@@ -13,6 +13,13 @@ import (
 
 func NewRouter(logger *slog.Logger, ping func(context.Context) error) *chi.Mux {
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+			w.Header().Set("Cache-Control", "no-store")
+			next.ServeHTTP(w, r)
+		})
+	})
 	r.Use(requestLogging(logger))
 	r.Use(panicRecovery(logger))
 	r.Get("/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {

@@ -46,6 +46,7 @@ type searchCursor struct {
 }
 type searchParameters struct {
 	query            string
+	ownerID          *string
 	brandID, modelID *string
 	limit            int
 	cursor           *searchCursor
@@ -115,12 +116,33 @@ func (s *Service) Search(ctx context.Context, input SearchInput) (SearchPage, er
 	if err != nil {
 		return SearchPage{}, err
 	}
+	return publicPage(items, params.limit), nil
+}
+func publicPage(items []SearchItem, limit int) SearchPage {
 	page := SearchPage{Items: items}
-	if len(items) > params.limit {
-		page.Items = items[:params.limit]
+	if len(items) > limit {
+		page.Items = items[:limit]
 		last := page.Items[len(page.Items)-1]
 		cursor := encodeSearchCursor(searchCursor{CreatedAt: last.CreatedAt, ID: last.ID})
 		page.NextCursor = &cursor
 	}
-	return page, nil
+	return page
+}
+
+// PublicUserSetups is public-only even for the owner/friends; the existing ListUser
+// endpoint retains its authenticated visibility-dependent array contract.
+func (s *Service) PublicUserSetups(ctx context.Context, ownerID string, input SearchInput) (SearchPage, error) {
+	params, err := normalizeSearch(input)
+	if err != nil {
+		return SearchPage{}, err
+	}
+	params.ownerID, err = canonicalUUID(&ownerID, "user_id")
+	if err != nil {
+		return SearchPage{}, err
+	}
+	items, err := s.repo.searchPublic(ctx, params)
+	if err != nil {
+		return SearchPage{}, err
+	}
+	return publicPage(items, params.limit), nil
 }

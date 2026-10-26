@@ -19,6 +19,7 @@ import (
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/friendships"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/web"
+	"github.com/go-chi/chi/v5"
 )
 
 func TestVisibilityHTTP(t *testing.T) {
@@ -30,7 +31,7 @@ func TestVisibilityHTTP(t *testing.T) {
 	provider := &fakeGoogle{}
 	authentication := auth.NewHandler(cfg, provider, users.NewService(users.NewRepository(pool)))
 	router := web.NewRouter(slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)), pool.Ping)
-	authentication.Register(router, NewHandler(service).RegisterAPI)
+	authentication.RegisterWithPublic(router, []func(chi.Router){NewHandler(service).RegisterPublicAPI}, NewHandler(service).RegisterPrivateAPI)
 	type account struct {
 		id     string
 		cookie *http.Cookie
@@ -95,7 +96,7 @@ func TestVisibilityHTTP(t *testing.T) {
 		{"accepted incoming", reverse, [3]int{200, 200, 404}, []string{setups[1].ID, setups[0].ID}},
 		{"unrelated", other, [3]int{200, 404, 404}, []string{setups[0].ID}},
 		{"pending", pending, [3]int{200, 404, 404}, []string{setups[0].ID}},
-		{"unauthenticated", account{}, [3]int{401, 401, 401}, nil},
+		{"unauthenticated", account{}, [3]int{200, 404, 404}, nil},
 	} {
 		t.Run(caller.name, func(t *testing.T) {
 			for i, s := range setups {

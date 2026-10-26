@@ -26,15 +26,18 @@ Change this file only for an enduring product-rule change, per [workflow](workfl
 
 ## Visibility and friendship
 
-| Authenticated viewer | Public | Friends | Private |
+| Viewer | Public | Friends | Private |
 | --- | --- | --- | --- |
+| Guest | Read | Deny | Deny |
 | Owner | Read | Read | Read |
 | Accepted friend | Read | Read | Deny |
 | Other / pending friend | Read | Deny | Deny |
 
 Discovery returns public setups only, even for owners/friends. Owner lists show all;
 profile lists return only backend-authorized items. Inaccessible and missing detail
-are indistinguishable. Reads do not grant modification rights; no anonymous browsing.
+are indistinguishable. Reads do not grant modification rights. Explore is public;
+safe owner profiles show nickname/avatar and public setups without hidden counts.
+Only public setup pages are index-eligible; login is prompted for protected actions.
 
 There is one pending/accepted relationship per unordered user pair; no self-friendship.
 Only the pending addressee accepts. Requester cancels, addressee rejects, either
@@ -56,7 +59,7 @@ technical-data replacement; unrelated edits preserve spacing and other measureme
 - Save the setup once before upload; failed uploads retain it and successful photos.
   Explicit retries reuse a UUID request_id and identical bytes. Technical edits do
   not change photos; image mutations persist independently.
-- All gallery/full/thumbnail reads require authentication and current setup visibility.
+- Gallery/full/thumbnail reads require current setup visibility; guests see public only.
   Visibility/friendship changes revoke later reads of known URLs. Private no-store
   media is not a public static asset; already downloaded copies cannot be revoked.
 - Content-based JPEG/JPG, PNG, WebP and HEVC HEIC/HEIF still images only: at most

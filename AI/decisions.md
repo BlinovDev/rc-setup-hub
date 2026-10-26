@@ -136,8 +136,8 @@ The updated frontend requires the new backend contract and a compatible SHA pair
 
 Status: accepted (Issue #5, setup-photos-v1).
 
-Allow 0–10 optional setup photos, owner writes and current authenticated setup
-visibility on every gallery/full/thumbnail read. One deterministic cover, stable
+Allow 0–10 optional setup photos, owner writes and current setup visibility on every gallery/full/thumbnail read
+(anonymous public access is added by D016). One deterministic cover, stable
 order, no captions/sorting. Store processed JPEGs on private persistent server
 storage, metadata/receipts/deletion outbox in PostgreSQL, per-setup locks and
 deferred cover/count constraints. Explicit retry UUIDs prevent duplicate uploads.
@@ -159,3 +159,15 @@ through setup locks and atomically publish immutable thumbnail files before DB
 commit. Keep full and baseline thumbnail bytes; clean replaced versions through
 existing durable outbox/reconciliation. No destructive backfill, editor rotation,
 new codec dependency, permissions or storage service.
+
+## D016 — Anonymous read-only public discovery
+
+Accepted: Issue #42 / product design #32. Public Explore is the landing page;
+public setup detail/media and safe owner profiles allow guests. Friends/private,
+account/admin routes and writes retain authentication/authorization. Explicit
+GET registrations use optional identity; no global auth bypass or anonymous writes.
+A public-only paginated owner summary endpoint preserves the old authenticated
+visibility-dependent list. Only public setup pages are SEO-indexable; frontend
+HTML metadata/robots/sitemap responsibilities and bounded origin safeguards are
+specified once in [API](api.md#anonymous-public-reads-issue-42). This supersedes the
+previous authenticated-only public-read restriction, not session or media privacy.

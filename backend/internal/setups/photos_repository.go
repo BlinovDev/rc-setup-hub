@@ -163,18 +163,25 @@ func (r *Repository) listPhotos(ctx context.Context, callerID, setupID string) (
 	return result, rows.Err()
 }
 
+func photoCaller(id string) any {
+	if id == "" {
+		return nil
+	}
+	return id
+}
+
 const photoVisibility = `(s.owner_id=$2 OR s.visibility='public' OR (s.visibility='friends' AND EXISTS(SELECT 1 FROM friendships f WHERE f.status='accepted' AND ((f.requester_id=s.owner_id AND f.addressee_id=$2) OR (f.addressee_id=s.owner_id AND f.requester_id=$2)))))`
 
 func (r *Repository) photoAccess(ctx context.Context, callerID, setupID string) error {
 	var id string
-	err := r.pool.QueryRow(ctx, `SELECT s.id::text FROM setups s WHERE s.id=$1 AND `+photoVisibility, setupID, callerID).Scan(&id)
+	err := r.pool.QueryRow(ctx, `SELECT s.id::text FROM setups s WHERE s.id=$1 AND `+photoVisibility, setupID, photoCaller(callerID)).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
 	return err
 }
 func (r *Repository) visiblePhoto(ctx context.Context, callerID, setupID, photoID string) (Photo, error) {
-	return scanPhoto(r.pool.QueryRow(ctx, `SELECT p.id::text,p.setup_id::text,p.storage_key,p.width,p.height,p.thumbnail_width,p.thumbnail_height,p.is_cover,p.created_at,p.crop,p.thumbnail_revision,COALESCE(p.thumbnail_key,p.storage_key) FROM setup_photos p JOIN setups s ON s.id=p.setup_id WHERE s.id=$1 AND `+photoVisibility+` AND p.id=$3`, setupID, callerID, photoID))
+	return scanPhoto(r.pool.QueryRow(ctx, `SELECT p.id::text,p.setup_id::text,p.storage_key,p.width,p.height,p.thumbnail_width,p.thumbnail_height,p.is_cover,p.created_at,p.crop,p.thumbnail_revision,COALESCE(p.thumbnail_key,p.storage_key) FROM setup_photos p JOIN setups s ON s.id=p.setup_id WHERE s.id=$1 AND `+photoVisibility+` AND p.id=$3`, setupID, photoCaller(callerID), photoID))
 }
 func (r *Repository) mutatePhoto(ctx context.Context, ownerID, setupID, photoID string, remove bool) (Photo, error) {
 	tx, err := r.pool.Begin(ctx)

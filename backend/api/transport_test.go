@@ -89,6 +89,7 @@ func TestTransportContract(t *testing.T) {
 		{"/api/v1/friendships", friendships.List{Incoming: []friendships.Item{item}, Outgoing: []friendships.Item{}, Accepted: []friendships.Item{}}},
 		{"/api/v1/setups/search", setups.SearchPage{Items: []setups.SearchItem{summary}}},
 		{"/api/v1/setups/search", setups.SearchPage{Items: []setups.SearchItem{}}},
+		{"/api/v1/users/" + id + "/public-setups", setups.SearchPage{Items: []setups.SearchItem{summary}}},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			body, err := json.Marshal(tc.value)

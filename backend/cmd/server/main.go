@@ -98,7 +98,7 @@ func main() {
 		}
 	}()
 	setupHandler := setups.NewHandler(setupService)
-	authHandler.Register(router, catalogHandler.RegisterAPI, setupHandler.RegisterAPI, friendshipHandler.RegisterAPI, func(r chi.Router) { userHandler.RegisterAPI(r, auth.CurrentUser) })
+	authHandler.RegisterWithPublic(router, []func(chi.Router){catalogHandler.RegisterAPI, setupHandler.RegisterPublicAPI, userHandler.RegisterPublicAPI}, setupHandler.RegisterPrivateAPI, friendshipHandler.RegisterAPI, func(r chi.Router) { userHandler.RegisterPrivateAPI(r, auth.CurrentUser) })
 	adminHandler, err := admin.New(authConfig, admin.NewRepository(pool))
 	if err != nil {
 		logger.Error("admin initialization failed")

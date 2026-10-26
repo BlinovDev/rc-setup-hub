@@ -51,7 +51,7 @@ func TestOpenAPIContract(t *testing.T) {
 	}
 	for path, methods := range map[string][]string{
 		"/health": {"get"}, "/openapi.yaml": {"get"}, "/auth/google": {"get"}, "/auth/google/callback": {"get"},
-		"/api/v1/users/{user_id}": {"get"}, "/api/v1/auth/logout": {"post"}, "/api/v1/me": {"get", "patch"}, "/api/v1/users/search": {"get"},
+		"/api/v1/users/{user_id}/public-setups": {"get"}, "/api/v1/users/{user_id}": {"get"}, "/api/v1/auth/logout": {"post"}, "/api/v1/me": {"get", "patch"}, "/api/v1/users/search": {"get"},
 		"/api/v1/friendships": {"get", "post"}, "/api/v1/friendships/{id}/accept": {"post"}, "/api/v1/friendships/{id}": {"delete"},
 		"/api/v1/chassis/brands": {"get"}, "/api/v1/chassis/brands/{brand_id}/models": {"get"},
 		"/api/v1/setups": {"post"}, "/api/v1/setups/{id}": {"get", "patch", "delete"},
@@ -70,8 +70,15 @@ func TestOpenAPIContract(t *testing.T) {
 				continue
 			}
 			if strings.HasPrefix(path, "/api/v1/") {
-				if security, overridden := op["security"]; overridden {
-					t.Errorf("%s %s overrides cookie security: %v", method, path, security)
+				public := method == "get" && (path == "/api/v1/users/{user_id}" || path == "/api/v1/users/{user_id}/public-setups" || path == "/api/v1/chassis/brands" || path == "/api/v1/chassis/brands/{brand_id}/models" || path == "/api/v1/setups/search" || path == "/api/v1/setups/{id}" || path == "/api/v1/setups/{id}/photos" || path == "/api/v1/setups/{id}/photos/{photo_id}/image" || path == "/api/v1/setups/{id}/photos/{photo_id}/thumbnail")
+				security, overridden := op["security"]
+				if public {
+					values, ok := security.([]any)
+					if !overridden || !ok || len(values) != 0 {
+						t.Errorf("public GET missing explicit security exception: %s", path)
+					}
+				} else if overridden {
+					t.Errorf("protected operation overrides cookie security: %s %s", method, path)
 				}
 			}
 		}

@@ -1,10 +1,10 @@
 package setups
 
-// VisibleVisibilities is the central read policy for an authenticated caller.
-// An empty caller fails closed; friendship must already be confirmed accepted.
+// VisibleVisibilities is the central read policy, including anonymous readers.
+// Guests receive only public even if a caller supplies an accepted-friend flag.
 func VisibleVisibilities(callerID, ownerID string, acceptedFriend bool) []Visibility {
 	if callerID == "" {
-		return nil
+		return []Visibility{Public}
 	}
 	if callerID == ownerID {
 		return []Visibility{Public, Friends, Private}
