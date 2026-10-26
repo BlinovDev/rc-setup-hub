@@ -67,7 +67,8 @@ func TestRearDifferentialHTTPPersistence(t *testing.T) {
 			t.Fatal("detail changed", got)
 		}
 		var display *DifferentialManufacturer
-		if id := differentialManufacturerID(want); id != nil {
+		if want.RearDifferential != nil && want.RearDifferential.ManufacturerID != nil {
+			id := want.RearDifferential.ManufacturerID
 			name := brand.Name
 			if *id == otherBrand.ID {
 				name = otherBrand.Name

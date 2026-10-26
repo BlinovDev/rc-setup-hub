@@ -67,7 +67,8 @@ func TestSteeringKnuckleHTTPPersistence(t *testing.T) {
 			t.Fatal("detail changed", got)
 		}
 		var display *DifferentialManufacturer
-		if id := steeringKnuckleManufacturerID(want); id != nil {
+		if want.FrontSteeringKnuckle != nil && want.FrontSteeringKnuckle.ManufacturerID != nil {
+			id := want.FrontSteeringKnuckle.ManufacturerID
 			name := brand.Name
 			if *id == otherBrand.ID {
 				name = otherBrand.Name

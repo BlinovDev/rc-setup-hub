@@ -44,37 +44,6 @@ func (s *Service) validateChassis(ctx context.Context, id *string) error {
 	}
 	return nil
 }
-func differentialManufacturerID(data DataV1) *string {
-	if data.RearDifferential == nil {
-		return nil
-	}
-	return data.RearDifferential.ManufacturerID
-}
-
-func steeringKnuckleManufacturerID(data DataV1) *string {
-	if data.FrontSteeringKnuckle == nil {
-		return nil
-	}
-	return data.FrontSteeringKnuckle.ManufacturerID
-}
-
-func lowerArmMountManufacturerIDs(data DataV1) [2]*string {
-	var result [2]*string
-	if data.Suspension == nil {
-		return result
-	}
-	for i, axle := range []*AxleSuspension{data.Suspension.Front, data.Suspension.Rear} {
-		if axle != nil && axle.LowerArmMount != nil {
-			result[i] = axle.LowerArmMount.ManufacturerID
-		}
-	}
-	return result
-}
-
-func (s *Service) validateDifferentialManufacturer(ctx context.Context, id *string) error {
-	return s.validateManufacturer(ctx, id, "rear differential")
-}
-
 func (s *Service) validateManufacturer(ctx context.Context, id *string, component string) error {
 	if id == nil {
 		return nil
@@ -103,19 +72,8 @@ func (s *Service) Create(ctx context.Context, ownerID string, input CreateInput)
 	if err := s.validateChassis(ctx, setup.ChassisModelID); err != nil {
 		return Setup{}, err
 	}
-	if err := s.validateDifferentialManufacturer(ctx, differentialManufacturerID(setup.Data)); err != nil {
-		return Setup{}, err
-	}
-	for i, id := range lowerArmMountManufacturerIDs(setup.Data) {
-		if err := s.validateManufacturer(ctx, id, []string{"front lower arm mount", "rear lower arm mount"}[i]); err != nil {
-			return Setup{}, err
-		}
-	}
-	if err := s.validateManufacturer(ctx, steeringKnuckleManufacturerID(setup.Data), "front steering knuckle"); err != nil {
-		return Setup{}, err
-	}
-	for i, id := range runningGearManufacturerIDs(setup.Data) {
-		if err := s.validateManufacturer(ctx, id, runningGearComponents[i]); err != nil {
+	for _, ref := range manufacturerReferences(setup.Data) {
+		if err := s.validateManufacturer(ctx, ref.id, ref.component); err != nil {
 			return Setup{}, err
 		}
 	}
@@ -190,10 +148,7 @@ func (s *Service) Patch(ctx context.Context, ownerID, id string, input PatchInpu
 		return Setup{}, err
 	}
 	expected := setup.UpdatedAt
-	previousManufacturer := differentialManufacturerID(setup.Data)
-	previousKnuckleManufacturer := steeringKnuckleManufacturerID(setup.Data)
-	previousGearManufacturers := runningGearManufacturerIDs(setup.Data)
-	previousMountManufacturers := lowerArmMountManufacturerIDs(setup.Data)
+	previousManufacturers := manufacturerReferences(setup.Data)
 	if input.Title.Present {
 		if err := requiredPatch("title", input.Title.Value); err != nil {
 			return Setup{}, err
@@ -226,27 +181,10 @@ func (s *Service) Patch(ctx context.Context, ownerID, id string, input PatchInpu
 	if err := normalize(&setup); err != nil {
 		return Setup{}, err
 	}
-	// Unchanged historical brands survive full-data edits, just like inactive chassis.
-	if manufacturer := differentialManufacturerID(setup.Data); !sameCatalogID(previousManufacturer, manufacturer) {
-		if err := s.validateDifferentialManufacturer(ctx, manufacturer); err != nil {
-			return Setup{}, err
-		}
-	}
-	for i, manufacturer := range lowerArmMountManufacturerIDs(setup.Data) {
-		if !sameCatalogID(previousMountManufacturers[i], manufacturer) {
-			if err := s.validateManufacturer(ctx, manufacturer, []string{"front lower arm mount", "rear lower arm mount"}[i]); err != nil {
-				return Setup{}, err
-			}
-		}
-	}
-	if manufacturer := steeringKnuckleManufacturerID(setup.Data); !sameCatalogID(previousKnuckleManufacturer, manufacturer) {
-		if err := s.validateManufacturer(ctx, manufacturer, "front steering knuckle"); err != nil {
-			return Setup{}, err
-		}
-	}
-	for i, manufacturer := range runningGearManufacturerIDs(setup.Data) {
-		if !sameCatalogID(previousGearManufacturers[i], manufacturer) {
-			if err := s.validateManufacturer(ctx, manufacturer, runningGearComponents[i]); err != nil {
+	// Compare the same component slot, never a brand used elsewhere in the document.
+	for i, ref := range manufacturerReferences(setup.Data) {
+		if !sameCatalogID(previousManufacturers[i].id, ref.id) {
+			if err := s.validateManufacturer(ctx, ref.id, ref.component); err != nil {
 				return Setup{}, err
 			}
 		}

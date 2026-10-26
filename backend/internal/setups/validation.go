@@ -42,14 +42,11 @@ func normalizeData(data *DataV1) error {
 		return err
 	}
 	if k := data.FrontSteeringKnuckle; k != nil {
-		if k.ManufacturerID != nil {
-			var id pgtype.UUID
-			if err := id.Scan(*k.ManufacturerID); err != nil || !id.Valid {
-				return invalid("front steering knuckle manufacturer_id must be a UUID")
-			}
-			canonical := id.String()
-			k.ManufacturerID = &canonical
+		id, err := canonicalUUID(k.ManufacturerID, "front steering knuckle manufacturer_id")
+		if err != nil {
+			return err
 		}
+		k.ManufacturerID = id
 		if err := technical(&k.Description); err != nil {
 			return err
 		}
@@ -61,14 +58,11 @@ func normalizeData(data *DataV1) error {
 		if d.Type != nil && *d.Type != Gear && *d.Type != LSD && *d.Type != Ball && *d.Type != Spool {
 			return invalid("rear differential type must be gear, lsd, ball or spool")
 		}
-		if d.ManufacturerID != nil {
-			var id pgtype.UUID
-			if err := id.Scan(*d.ManufacturerID); err != nil || !id.Valid {
-				return invalid("rear differential manufacturer_id must be a UUID")
-			}
-			canonical := id.String()
-			d.ManufacturerID = &canonical
+		id, err := canonicalUUID(d.ManufacturerID, "rear differential manufacturer_id")
+		if err != nil {
+			return err
 		}
+		d.ManufacturerID = id
 		if err := technical(&d.Model); err != nil {
 			return err
 		}
@@ -80,108 +74,11 @@ func normalizeData(data *DataV1) error {
 			data.RearDifferential = nil
 		}
 	}
-	if data.Suspension != nil {
-		removedEmptyAxle := false
-		for _, axleSlot := range []**AxleSuspension{&data.Suspension.Front, &data.Suspension.Rear} {
-			axle := *axleSlot
-			if axle == nil {
-				continue
-			}
-			hadOptionalBlock := axle.TopArmSpacing != nil || axle.LowerArmSpacing != nil || axle.LowerArmMount != nil
-			if mount := axle.LowerArmMount; mount != nil {
-				if mount.ManufacturerID != nil {
-					var id pgtype.UUID
-					if err := id.Scan(*mount.ManufacturerID); err != nil || !id.Valid {
-						return invalid("lower arm mount manufacturer_id must be a UUID")
-					}
-					canonical := id.String()
-					mount.ManufacturerID = &canonical
-				}
-				if err := technical(&mount.Model); err != nil {
-					return err
-				}
-				mount.ConfigurationNotes = strings.TrimSpace(mount.ConfigurationNotes)
-				if !validText(mount.ConfigurationNotes, 10000) {
-					return invalid("lower arm mount configuration_notes must contain at most 10000 characters without null bytes")
-				}
-				if mount.ManufacturerID == nil && mount.Model == "" && mount.ConfigurationNotes == "" {
-					axle.LowerArmMount = nil
-				}
-			}
-			for _, spacing := range []**ArmSpacing{&axle.TopArmSpacing, &axle.LowerArmSpacing} {
-				if *spacing == nil {
-					continue
-				}
-				for _, value := range []*float64{(*spacing).FrontMM, (*spacing).RearMM} {
-					if value != nil && (!finite(*value) || *value < 0) {
-						return invalid("arm spacer totals must be finite numbers greater than or equal to zero")
-					}
-				}
-				if (*spacing).FrontMM == nil && (*spacing).RearMM == nil {
-					*spacing = nil
-				}
-			}
-			// Prune parents introduced solely by empty optional blocks; leave legacy documents alone.
-			if hadOptionalBlock && axle.LowerArmMount == nil && axle.TopArmSpacing == nil && axle.LowerArmSpacing == nil &&
-				axle.CamberDeg == nil && axle.CasterDeg == nil && axle.ToeDeg == nil && len(axle.LinkLengths) == 0 {
-				*axleSlot = nil
-				removedEmptyAxle = true
-				continue
-			}
-			for _, degree := range []*float64{axle.CamberDeg, axle.CasterDeg, axle.ToeDeg} {
-				if degree != nil && !finite(*degree) {
-					return invalid("suspension angles must be finite numbers")
-				}
-			}
-			if len(axle.LinkLengths) > 100 {
-				return invalid("each axle may have at most 100 link lengths")
-			}
-			for i := range axle.LinkLengths {
-				link := &axle.LinkLengths[i]
-				link.Name = strings.TrimSpace(link.Name)
-				if link.Name == "" || !validText(link.Name, 200) || !finite(link.LengthMM) || link.LengthMM <= 0 {
-					return invalid("link lengths require a name and length_mm greater than zero")
-				}
-			}
-		}
-		if removedEmptyAxle && data.Suspension.Front == nil && data.Suspension.Rear == nil {
-			data.Suspension = nil
-		}
+	if err := normalizeSuspension(data); err != nil {
+		return err
 	}
-	if data.Shocks != nil {
-		removedEmptyHardware := false
-		for _, slot := range []**Shock{&data.Shocks.Front, &data.Shocks.Rear} {
-			shock := *slot
-			if shock == nil {
-				continue
-			}
-			for _, text := range []*string{&shock.Manufacturer, &shock.Model} {
-				if err := technical(text); err != nil {
-					return err
-				}
-			}
-			if shock.Spring != nil {
-				for _, text := range []*string{&shock.Spring.Manufacturer, &shock.Spring.Color} {
-					if err := technical(text); err != nil {
-						return err
-					}
-				}
-			}
-			if shock.OilCST != nil && (!finite(*shock.OilCST) || *shock.OilCST <= 0) {
-				return invalid("oil_cst must be greater than zero")
-			}
-			hadHardware := shock.Piston != nil || shock.Seal != nil
-			if err := normalizeShockHardware(shock); err != nil {
-				return err
-			}
-			if hadHardware && shock.Piston == nil && shock.Seal == nil && shock.Manufacturer == "" && shock.Model == "" && shock.Spring == nil && shock.OilCST == nil {
-				*slot = nil
-				removedEmptyHardware = true
-			}
-		}
-		if removedEmptyHardware && data.Shocks.Front == nil && data.Shocks.Rear == nil {
-			data.Shocks = nil
-		}
+	if err := normalizeShocks(data); err != nil {
+		return err
 	}
 	if data.Electronics != nil {
 		e := data.Electronics
@@ -228,4 +125,129 @@ func requiredPatch(field string, value *string) error {
 		return invalid(fmt.Sprintf("%s cannot be null", field))
 	}
 	return nil
+}
+
+func normalizeSuspension(data *DataV1) error {
+	if data.Suspension == nil {
+		return nil
+	}
+	removedEmptyAxle := false
+	for _, axleSlot := range []**AxleSuspension{&data.Suspension.Front, &data.Suspension.Rear} {
+		axle := *axleSlot
+		if axle == nil {
+			continue
+		}
+		hadOptionalBlock := axle.TopArmSpacing != nil || axle.LowerArmSpacing != nil || axle.LowerArmMount != nil
+		if mount := axle.LowerArmMount; mount != nil {
+			id, err := canonicalUUID(mount.ManufacturerID, "lower arm mount manufacturer_id")
+			if err != nil {
+				return err
+			}
+			mount.ManufacturerID = id
+			if err := technical(&mount.Model); err != nil {
+				return err
+			}
+			mount.ConfigurationNotes = strings.TrimSpace(mount.ConfigurationNotes)
+			if !validText(mount.ConfigurationNotes, 10000) {
+				return invalid("lower arm mount configuration_notes must contain at most 10000 characters without null bytes")
+			}
+			if mount.ManufacturerID == nil && mount.Model == "" && mount.ConfigurationNotes == "" {
+				axle.LowerArmMount = nil
+			}
+		}
+		for _, spacing := range []**ArmSpacing{&axle.TopArmSpacing, &axle.LowerArmSpacing} {
+			if *spacing == nil {
+				continue
+			}
+			for _, value := range []*float64{(*spacing).FrontMM, (*spacing).RearMM} {
+				if value != nil && (!finite(*value) || *value < 0) {
+					return invalid("arm spacer totals must be finite numbers greater than or equal to zero")
+				}
+			}
+			if (*spacing).FrontMM == nil && (*spacing).RearMM == nil {
+				*spacing = nil
+			}
+		}
+		// Prune parents introduced solely by empty optional blocks; leave legacy documents alone.
+		if hadOptionalBlock && axle.LowerArmMount == nil && axle.TopArmSpacing == nil && axle.LowerArmSpacing == nil &&
+			axle.CamberDeg == nil && axle.CasterDeg == nil && axle.ToeDeg == nil && len(axle.LinkLengths) == 0 {
+			*axleSlot = nil
+			removedEmptyAxle = true
+			continue
+		}
+		for _, degree := range []*float64{axle.CamberDeg, axle.CasterDeg, axle.ToeDeg} {
+			if degree != nil && !finite(*degree) {
+				return invalid("suspension angles must be finite numbers")
+			}
+		}
+		if len(axle.LinkLengths) > 100 {
+			return invalid("each axle may have at most 100 link lengths")
+		}
+		for i := range axle.LinkLengths {
+			link := &axle.LinkLengths[i]
+			link.Name = strings.TrimSpace(link.Name)
+			if link.Name == "" || !validText(link.Name, 200) || !finite(link.LengthMM) || link.LengthMM <= 0 {
+				return invalid("link lengths require a name and length_mm greater than zero")
+			}
+		}
+	}
+	if removedEmptyAxle && data.Suspension.Front == nil && data.Suspension.Rear == nil {
+		data.Suspension = nil
+	}
+
+	return nil
+}
+
+func normalizeShocks(data *DataV1) error {
+	if data.Shocks == nil {
+		return nil
+	}
+	removedEmptyHardware := false
+	for _, slot := range []**Shock{&data.Shocks.Front, &data.Shocks.Rear} {
+		shock := *slot
+		if shock == nil {
+			continue
+		}
+		for _, text := range []*string{&shock.Manufacturer, &shock.Model} {
+			if err := technical(text); err != nil {
+				return err
+			}
+		}
+		if shock.Spring != nil {
+			for _, text := range []*string{&shock.Spring.Manufacturer, &shock.Spring.Color} {
+				if err := technical(text); err != nil {
+					return err
+				}
+			}
+		}
+		if shock.OilCST != nil && (!finite(*shock.OilCST) || *shock.OilCST <= 0) {
+			return invalid("oil_cst must be greater than zero")
+		}
+		hadHardware := shock.Piston != nil || shock.Seal != nil
+		if err := normalizeShockHardware(shock); err != nil {
+			return err
+		}
+		if hadHardware && shock.Piston == nil && shock.Seal == nil && shock.Manufacturer == "" && shock.Model == "" && shock.Spring == nil && shock.OilCST == nil {
+			*slot = nil
+			removedEmptyHardware = true
+		}
+	}
+	if removedEmptyHardware && data.Shocks.Front == nil && data.Shocks.Rear == nil {
+		data.Shocks = nil
+	}
+
+	return nil
+}
+
+// canonicalUUID validates nullable catalog/query IDs without changing input storage.
+func canonicalUUID(value *string, field string) (*string, error) {
+	if value == nil {
+		return nil, nil
+	}
+	var uuid pgtype.UUID
+	if err := uuid.Scan(*value); err != nil || !uuid.Valid {
+		return nil, invalid(field + " must be a UUID")
+	}
+	canonical := uuid.String()
+	return &canonical, nil
 }

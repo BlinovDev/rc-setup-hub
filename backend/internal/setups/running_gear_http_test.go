@@ -76,8 +76,22 @@ func TestRunningGearHTTPPersistence(t *testing.T) {
 					if !reflect.DeepEqual(got.Data, want) {
 						t.Fatalf("detail data lost: %s", encode(got.Data))
 					}
-					ids := runningGearManufacturerIDs(want)
-					if part != "hex" && ids != [4]*string{} {
+					var manufacturer *string
+					if want.RunningGear != nil {
+						expectedAxle := want.RunningGear.Front
+						if side == "rear" {
+							expectedAxle = want.RunningGear.Rear
+						}
+						if expectedAxle != nil {
+							if part == "wheel" && expectedAxle.Wheel != nil {
+								manufacturer = expectedAxle.Wheel.ManufacturerID
+							}
+							if part == "tire" && expectedAxle.Tire != nil {
+								manufacturer = expectedAxle.Tire.ManufacturerID
+							}
+						}
+					}
+					if manufacturer != nil {
 						if got.RunningGearManufacturers == nil {
 							t.Fatal("missing catalogue projection")
 						}

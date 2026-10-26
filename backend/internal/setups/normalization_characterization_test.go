@@ -52,3 +52,43 @@ func TestManufacturerNormalizationContract(t *testing.T) {
 		}
 	}
 }
+
+func TestManufacturerReferenceSlots(t *testing.T) {
+	var data DataV1
+	data.RearDifferential = &RearDifferential{ManufacturerID: stringPtr("differential")}
+	data.Suspension = &Suspension{
+		Front: &AxleSuspension{LowerArmMount: &LowerArmMount{ManufacturerID: stringPtr("front mount")}},
+		Rear:  &AxleSuspension{LowerArmMount: &LowerArmMount{ManufacturerID: stringPtr("rear mount")}},
+	}
+	data.FrontSteeringKnuckle = &SteeringKnuckle{ManufacturerID: stringPtr("knuckle")}
+	data.RunningGear = &RunningGear{
+		Front: &AxleRunningGear{Wheel: &Wheel{ManufacturerID: stringPtr("front wheel")}, Tire: &Tire{ManufacturerID: stringPtr("front tire")}},
+		Rear:  &AxleRunningGear{Wheel: &Wheel{ManufacturerID: stringPtr("rear wheel")}, Tire: &Tire{ManufacturerID: stringPtr("rear tire")}},
+	}
+	want := []string{"differential", "front mount", "rear mount", "knuckle", "front wheel", "front tire", "rear wheel", "rear tire"}
+	labels := []string{"rear differential", "front lower arm mount", "rear lower arm mount", "front steering knuckle", "front wheel", "front tire", "rear wheel", "rear tire"}
+	for i, ref := range manufacturerReferences(data) {
+		if ref.component != labels[i] || ref.id == nil || *ref.id != want[i] {
+			t.Fatalf("slot %d: %+v", i, ref)
+		}
+	}
+	// Missing earlier parts must not shift later historical IDs into different slots.
+	data.RearDifferential = nil
+	data.Suspension.Front = nil
+	data.FrontSteeringKnuckle = nil
+	data.RunningGear.Front.Wheel = nil
+	for i, ref := range manufacturerReferences(data) {
+		missing := i == 0 || i == 1 || i == 3 || i == 4
+		if ref.component != labels[i] || (ref.id == nil) != missing {
+			t.Fatalf("removed slot %d: %+v", i, ref)
+		}
+		if !missing && *ref.id != want[i] {
+			t.Fatalf("shifted historical reference %d", i)
+		}
+	}
+	for _, ref := range manufacturerReferences(DataV1{}) {
+		if ref.id != nil {
+			t.Fatal("empty data has manufacturer IDs")
+		}
+	}
+}
