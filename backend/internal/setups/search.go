@@ -9,7 +9,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // SearchInput contains raw query values; nil distinguishes absent optional parameters.
@@ -52,17 +51,6 @@ type searchParameters struct {
 	cursor           *searchCursor
 }
 
-func searchUUID(value *string, field string) (*string, error) {
-	if value == nil {
-		return nil, nil
-	}
-	var uuid pgtype.UUID
-	if err := uuid.Scan(*value); err != nil || !uuid.Valid {
-		return nil, invalid(field + " must be a UUID")
-	}
-	canonical := uuid.String()
-	return &canonical, nil
-}
 func encodeSearchCursor(cursor searchCursor) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(cursor.CreatedAt.UTC().Format(time.RFC3339Nano) + "|" + cursor.ID))
 }
@@ -82,7 +70,7 @@ func decodeSearchCursor(value string) (*searchCursor, error) {
 	if err != nil || createdAt.UTC().Year() < 1 || createdAt.UTC().Year() > 9999 {
 		return nil, invalid("invalid cursor")
 	}
-	id, err := searchUUID(&fields[1], "cursor id")
+	id, err := canonicalUUID(&fields[1], "cursor id")
 	if err != nil {
 		return nil, invalid("invalid cursor")
 	}
@@ -94,11 +82,11 @@ func normalizeSearch(input SearchInput) (searchParameters, error) {
 		return params, invalid("q must contain at most 100 characters without null bytes")
 	}
 	var err error
-	params.brandID, err = searchUUID(input.BrandID, "brand_id")
+	params.brandID, err = canonicalUUID(input.BrandID, "brand_id")
 	if err != nil {
 		return params, err
 	}
-	params.modelID, err = searchUUID(input.ModelID, "model_id")
+	params.modelID, err = canonicalUUID(input.ModelID, "model_id")
 	if err != nil {
 		return params, err
 	}
