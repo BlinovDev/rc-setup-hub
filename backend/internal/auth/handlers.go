@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/config"
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/httpjson"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -47,7 +48,7 @@ func (h *Handler) Register(r chi.Router, apiRoutes ...func(chi.Router)) {
 			h.sessions.Logout(w, r)
 			w.WriteHeader(http.StatusNoContent)
 		})
-		r.Get("/me", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, currentUser(r)) })
+		r.Get("/me", func(w http.ResponseWriter, r *http.Request) { httpjson.Write(w, 200, currentUser(r)) })
 		r.Patch("/me", h.updateNickname)
 		for _, register := range apiRoutes {
 			register(r)
@@ -55,27 +56,16 @@ func (h *Handler) Register(r chi.Router, apiRoutes ...func(chi.Router)) {
 	})
 }
 func equal(a, b string) bool { return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1 }
-func respond(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
-}
-func fail(w http.ResponseWriter, status int, message string) {
-	respond(w, status, struct {
-		Error string `json:"error"`
-	}{message})
-}
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	nonce, err := randomToken()
 	if err != nil {
-		fail(w, 500, "authentication unavailable")
+		httpjson.Error(w, 500, "authentication unavailable")
 		return
 	}
 	verifier := oauth2.GenerateVerifier()
 	state, err := h.sessions.Start(w, nonce, verifier)
 	if err != nil {
-		fail(w, 500, "authentication unavailable")
+		httpjson.Error(w, 500, "authentication unavailable")
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -87,31 +77,31 @@ func (h *Handler) callback(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	f, err := h.sessions.Consume(w, r, r.URL.Query().Get("state"))
 	if err != nil {
-		fail(w, 400, "invalid or expired OAuth state")
+		httpjson.Error(w, 400, "invalid or expired OAuth state")
 		return
 	}
 	if r.URL.Query().Get("error") != "" || r.URL.Query().Get("code") == "" {
-		fail(w, 400, "Google authorization was not completed")
+		httpjson.Error(w, 400, "Google authorization was not completed")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	identity, err := h.provider.Exchange(ctx, r.URL.Query().Get("code"), f.nonce, f.verifier)
 	if err != nil {
-		fail(w, 401, "Google identity verification failed")
+		httpjson.Error(w, 401, "Google identity verification failed")
 		return
 	}
 	user, err := h.users.Login(ctx, identity)
 	if err != nil {
 		if errors.Is(err, users.ErrEmailConflict) {
-			fail(w, 409, "email already in use")
+			httpjson.Error(w, 409, "email already in use")
 			return
 		}
-		fail(w, 500, "authentication unavailable")
+		httpjson.Error(w, 500, "authentication unavailable")
 		return
 	}
 	if err := h.sessions.Issue(w, r, user.ID); err != nil {
-		fail(w, 500, "authentication unavailable")
+		httpjson.Error(w, 500, "authentication unavailable")
 		return
 	}
 	http.Redirect(w, r, h.appURL, http.StatusSeeOther)
@@ -132,17 +122,17 @@ func (h *Handler) RequireUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id, err := h.sessions.UserID(r)
 		if err != nil {
-			fail(w, 401, "authentication required")
+			httpjson.Error(w, 401, "authentication required")
 			return
 		}
 		user, err := h.users.Get(r.Context(), id)
 		if err != nil {
 			if errors.Is(err, users.ErrNotFound) {
 				h.sessions.Logout(w, r)
-				fail(w, 401, "authentication required")
+				httpjson.Error(w, 401, "authentication required")
 				return
 			}
-			fail(w, 500, "profile unavailable")
+			httpjson.Error(w, 500, "profile unavailable")
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userContextKey{}, user)))
@@ -160,7 +150,7 @@ func (h *Handler) checkOrigin(next http.Handler) http.Handler {
 			}
 			// Non-browser API tools omit Origin. Reject cross-site browser requests even when Origin is absent.
 			if (origin != "" && !allowed) || (origin == "" && r.Header.Get("Sec-Fetch-Site") == "cross-site") {
-				fail(w, 403, "origin not allowed")
+				httpjson.Error(w, 403, "origin not allowed")
 				return
 			}
 		}
@@ -170,7 +160,7 @@ func (h *Handler) checkOrigin(next http.Handler) http.Handler {
 func (h *Handler) updateNickname(w http.ResponseWriter, r *http.Request) {
 	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || contentType != "application/json" {
-		fail(w, 415, "Content-Type must be application/json")
+		httpjson.Error(w, 415, "Content-Type must be application/json")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
@@ -180,24 +170,24 @@ func (h *Handler) updateNickname(w http.ResponseWriter, r *http.Request) {
 		Nickname string `json:"nickname"`
 	}
 	if err := decoder.Decode(&input); err != nil {
-		fail(w, 400, "invalid JSON body")
+		httpjson.Error(w, 400, "invalid JSON body")
 		return
 	}
 	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
-		fail(w, 400, "invalid JSON body")
+		httpjson.Error(w, 400, "invalid JSON body")
 		return
 	}
 	user, err := h.users.UpdateNickname(r.Context(), currentUser(r).ID, input.Nickname)
 	if err != nil {
 		switch {
 		case errors.Is(err, users.ErrInvalidNickname):
-			fail(w, 400, users.ErrInvalidNickname.Error())
+			httpjson.Error(w, 400, users.ErrInvalidNickname.Error())
 		case errors.Is(err, users.ErrNicknameConflict):
-			fail(w, 409, users.ErrNicknameConflict.Error())
+			httpjson.Error(w, 409, users.ErrNicknameConflict.Error())
 		default:
-			fail(w, 500, "profile update unavailable")
+			httpjson.Error(w, 500, "profile update unavailable")
 		}
 		return
 	}
-	respond(w, 200, user)
+	httpjson.Write(w, 200, user)
 }

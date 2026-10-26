@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/httpjson"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/photos"
 )
 
@@ -79,14 +80,12 @@ func (h *Handler) cropPhoto(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	p, err := h.service.applyCrop(ctx, caller, setupID, photoID, value)
 	if errors.Is(err, photos.ErrBusy) {
-		respond(w, 503, struct {
-			Error string `json:"error"`
-		}{"photo processor busy; retry the same crop and expected_revision"})
+		httpjson.Error(w, 503, "photo processor busy; retry the same crop and expected_revision")
 		return
 	}
 	if err != nil {
 		photoFailure(w, err)
 		return
 	}
-	respond(w, 200, p)
+	httpjson.Write(w, 200, p)
 }

@@ -3,6 +3,8 @@ package setups
 import (
 	"net/http"
 	"net/url"
+
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/httpjson"
 )
 
 func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
@@ -32,5 +34,5 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 		failure(w, err)
 		return
 	}
-	respond(w, http.StatusOK, page)
+	httpjson.Write(w, http.StatusOK, page)
 }

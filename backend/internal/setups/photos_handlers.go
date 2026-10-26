@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/httpjson"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/photos"
 	"github.com/go-chi/chi/v5"
 )
@@ -50,9 +51,7 @@ func (s *Service) uploadPhoto(ctx context.Context, ownerID, setupID, requestID s
 }
 func photoFailure(w http.ResponseWriter, err error) {
 	if errors.Is(err, photos.ErrBusy) {
-		respond(w, 503, struct {
-			Error string `json:"error"`
-		}{"photo uploads busy; retry with the same request_id"})
+		httpjson.Error(w, 503, "photo uploads busy; retry with the same request_id")
 		return
 	}
 	if errors.Is(err, photos.ErrImage) {
@@ -89,7 +88,7 @@ func (h *Handler) gallery(w http.ResponseWriter, r *http.Request) {
 		photoFailure(w, err)
 		return
 	}
-	respond(w, 200, list)
+	httpjson.Write(w, 200, list)
 }
 func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 	uploadCtx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
@@ -107,9 +106,7 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 	case h.service.uploadSlots <- struct{}{}:
 		defer func() { <-h.service.uploadSlots }()
 	default:
-		respond(w, 503, struct {
-			Error string `json:"error"`
-		}{"photo uploads busy; retry with the same request_id"})
+		httpjson.Error(w, 503, "photo uploads busy; retry with the same request_id")
 		return
 	}
 	// Owner authorization precedes multipart parsing and image decoding.
@@ -176,7 +173,7 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 		photoFailure(w, err)
 		return
 	}
-	respond(w, 201, p)
+	httpjson.Write(w, 201, p)
 }
 func (h *Handler) coverPhoto(w http.ResponseWriter, r *http.Request)  { h.photoMutation(w, r, false) }
 func (h *Handler) deletePhoto(w http.ResponseWriter, r *http.Request) { h.photoMutation(w, r, true) }
@@ -197,7 +194,7 @@ func (h *Handler) photoMutation(w http.ResponseWriter, r *http.Request, remove b
 		w.WriteHeader(204)
 		return
 	}
-	respond(w, 200, p)
+	httpjson.Write(w, 200, p)
 }
 func (h *Handler) photoImage(w http.ResponseWriter, r *http.Request) {
 	caller, setupID, photoID, ok := photoIDs(w, r)

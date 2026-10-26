@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/auth"
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/httpjson"
 	"github.com/go-chi/chi/v5"
 	"io"
 	"mime"
@@ -19,14 +20,6 @@ func (h *Handler) RegisterAPI(r chi.Router) {
 	r.Post("/friendships/{id}/accept", h.accept)
 	r.Delete("/friendships/{id}", h.delete)
 }
-func respond(w http.ResponseWriter, code int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(code)
-	if code != 204 {
-		_ = json.NewEncoder(w).Encode(value)
-	}
-}
 func failure(w http.ResponseWriter, err error) {
 	code, message := 500, "friendship operation failed"
 	switch {
@@ -37,16 +30,12 @@ func failure(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrConflict):
 		code, message = 409, ErrConflict.Error()
 	}
-	respond(w, code, struct {
-		Error string `json:"error"`
-	}{message})
+	httpjson.Error(w, code, message)
 }
 func caller(w http.ResponseWriter, r *http.Request) (string, bool) {
 	user, ok := auth.CurrentUser(r)
 	if !ok {
-		respond(w, 401, struct {
-			Error string `json:"error"`
-		}{"authentication required"})
+		httpjson.Error(w, 401, "authentication required")
 		return "", false
 	}
 	return user.ID, true
@@ -63,9 +52,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 	decoder.DisallowUnknownFields()
 	if err != nil || media != "application/json" || decoder.Decode(&body) != nil || body == nil || !errors.Is(decoder.Decode(new(json.RawMessage)), io.EOF) {
-		respond(w, 400, struct {
-			Error string `json:"error"`
-		}{"expected one JSON object with user_id"})
+		httpjson.Error(w, 400, "expected one JSON object with user_id")
 		return
 	}
 	relationship, err := h.service.Create(r.Context(), id, body.UserID)
@@ -73,7 +60,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		failure(w, err)
 		return
 	}
-	respond(w, 201, relationship)
+	httpjson.Write(w, 201, relationship)
 }
 func (h *Handler) accept(w http.ResponseWriter, r *http.Request) {
 	id, ok := caller(w, r)
@@ -85,7 +72,7 @@ func (h *Handler) accept(w http.ResponseWriter, r *http.Request) {
 		failure(w, err)
 		return
 	}
-	respond(w, 200, relationship)
+	httpjson.Write(w, 200, relationship)
 }
 func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := caller(w, r)
@@ -96,7 +83,7 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
 		failure(w, err)
 		return
 	}
-	respond(w, 204, nil)
+	httpjson.Write(w, 204, nil)
 }
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	id, ok := caller(w, r)
@@ -108,5 +95,5 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		failure(w, err)
 		return
 	}
-	respond(w, 200, list)
+	httpjson.Write(w, 200, list)
 }
