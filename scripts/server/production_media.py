@@ -1,7 +1,7 @@
 """Production-only host gates; installed root-owned beside the deployment controller.
 
 No caller-selected filesystem paths or root execution of release binaries.
-Production deliberately does not call this module.
+Staging deliberately does not call this module.
 """
 import hashlib
 import json

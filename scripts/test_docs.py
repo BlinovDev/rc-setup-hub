@@ -1,5 +1,8 @@
 """Behavioral regressions for offline docs checking using disposable files."""
 import importlib.util
+import contextlib
+import io
+from unittest.mock import patch
 from pathlib import Path
 import tempfile
 import unittest
@@ -44,10 +47,35 @@ class DocsTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.touch()
         self.assertEqual(checker.verify_router(self.root), [])
-        self.doc.write_text(self.doc.read_text()+'\n[history](AI/archive/poc.md)')
+        anchored = self.doc.read_text().replace('AI/architecture.md)', 'AI/architecture.md#package-boundaries)')
+        self.doc.write_text(anchored)
+        self.assertEqual(checker.verify_router(self.root), [])
+        self.doc.write_text(anchored.replace('AI/architecture.md#package-boundaries', 'https://example.invalid/AI/architecture.md'))
+        self.assertTrue(any('AI/architecture.md' in e for e in checker.verify_router(self.root)))
+        self.doc.write_text(anchored+'\n[history](AI/archive/poc.md)')
         self.assertTrue(any('archive' in e for e in checker.verify_router(self.root)))
         self.doc.write_text('No routes')
         self.assertTrue(any('AI/testing.md' in e for e in checker.verify_router(self.root)))
+
+    def test_statistics_uses_same_current_entry_set_for_both_revisions(self):
+        current = {'AGENTS.md': b'router\n', 'AI/workflow.md': b'workflow\n'}
+        old = {**current, 'AI/main.md': b'legacy index\n'*10, 'AI/product.md': b'optional product\n'*10}
+        for name, contents in old.items():
+            path = self.root/name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(contents)
+        def git_output(args, **kwargs):
+            if args[1] == 'rev-parse': return b'abc\n'
+            if args[1] == 'ls-tree': return ('\n'.join(old)+'\n').encode()
+            return old[args[-1].split(':', 1)[1]]
+        output = io.StringIO()
+        with patch.object(checker.subprocess, 'check_output', side_effect=git_output), contextlib.redirect_stdout(output):
+            checker.statistics(self.root, 'BASE')
+        lines = output.getvalue().splitlines()
+        before = next(line for line in lines if line.startswith('Default context before:'))
+        after = next(line for line in lines if line.startswith('Default context after:'))
+        self.assertEqual(before.split(':', 1)[1].strip(), after.split(':', 1)[1].strip())
+        self.assertIn("'files': 2", before)
 
 
 if __name__ == '__main__':

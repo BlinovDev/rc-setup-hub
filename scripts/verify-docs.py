@@ -75,8 +75,10 @@ def verify_router(root):
     if not router.is_file():
         return ['Missing AGENTS.md']
     links = destinations(router.read_text(encoding='utf-8'))
+    local_topics = {urlsplit(link).path for link in links
+                    if not urlsplit(link).scheme and not urlsplit(link).netloc}
     for name in REQUIRED:
-        if name not in links:
+        if name not in local_topics:
             errors.append('AGENTS.md must route to '+name)
     if any(link.startswith('AI/archive/') for link in links):
         errors.append('AGENTS.md must not load archive files directly')
@@ -102,11 +104,11 @@ def statistics(root, base):
     print('Active core = root README/AGENTS, AI/*.md, backend README/AGENTS if present; archives/skills excluded.')
     print('Before:', size(list(before.values())))
     print('After: ', size(list(after.values())))
-    # The former router mandated these four; the new router requires only two.
-    old_entry = ('AGENTS.md', 'AI/main.md', 'AI/product.md', 'AI/workflow.md')
-    new_entry = ('AGENTS.md', 'AI/workflow.md')
-    print('Default context before:', size([before[p] for p in old_entry]))
-    print('Default context after: ', size([after[p] for p in new_entry]))
+    # Compare the same current entry contract; historical mandatory files would
+    # invent a reduction when BASE already uses progressive context loading.
+    entry = ('AGENTS.md', 'AI/workflow.md')
+    print('Default context before:', size([before[p] for p in entry]))
+    print('Default context after: ', size([after[p] for p in entry]))
     print('Historical archive (not default context):', size([p.read_bytes() for p in (root/'AI/archive').glob('*.md')]))
 
 

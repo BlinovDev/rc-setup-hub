@@ -7,9 +7,9 @@ load every AI document or historical roadmap. No prior chat context is required.
 | Task | Context to load |
 | --- | --- |
 | Product rule / permission / feature | [Product](AI/product.md), relevant [decisions](AI/decisions.md) |
-| Go implementation / architecture | [backend instructions](backend/AGENTS.md), [architecture](AI/architecture.md), [development](AI/development.md) |
+| Go implementation / architecture | [backend instructions](backend/AGENTS.md), [package boundaries](AI/architecture.md#package-boundaries), [coding rules](AI/development.md#coding-rules) |
 | HTTP / auth / contract | [API](AI/api.md), [security boundary](AI/architecture.md#authentication-and-security), affected OpenAPI schemas/tests |
-| SQL / migration / media persistence | [Database](AI/database.md), affected migrations/repositories |
+| SQL / migration / media persistence | [Storage owners and atomicity](AI/database.md), affected migrations/repositories |
 | Checks / bug regression | [Testing](AI/testing.md), nearest existing tests |
 | Release / host / recovery | [Deployment](AI/deployment.md), [host runbook](scripts/server/README.md) |
 | Documentation / instructions | [Workflow](AI/workflow.md), [context smoke](AI/context-smoke.md); edit only affected sources |
