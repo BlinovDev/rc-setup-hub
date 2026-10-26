@@ -1,246 +1,47 @@
 # Database design
 
-Database: PostgreSQL.
+## Sources and ownership
 
-Use UUID primary keys and `TIMESTAMPTZ`.
+[SQL migrations](../backend/migrations) own tables, constraints, indexes and foreign
+keys. [Typed setup models](../backend/internal/setups/model.go) and
+[OpenAPI schemas](../backend/api/openapi.yaml) own current schema-v1 fields. Read
+those files for an affected field instead of maintaining a second schema or JSON
+example here. [Product](product.md) owns business rules and the visibility matrix;
+[security](architecture.md#authentication-and-security) owns authorization.
 
-## 1. users
+PostgreSQL uses UUID identities and TIMESTAMPTZ/UTC. Current storage boundaries:
 
-Purpose: application users authenticated through Google.
+| Storage | Canonical definition | Responsibility |
+| --- | --- | --- |
+| Users | [00001](../backend/migrations/00001_users.sql) | Stable Google subject; case-insensitive unique email/nickname; no admin role column |
+| Friendships | [00002](../backend/migrations/00002_friendships.sql) | Unique unordered user pair, no self-pair; user deletion cascades |
+| Chassis catalogs | [00003](../backend/migrations/00003_chassis_brands.sql), [00004](../backend/migrations/00004_chassis_models.sql) | Case-insensitive names; model brand FK restricts deletion; disable historical references |
+| Setups/search | [00005](../backend/migrations/00005_setups.sql) | Relational owner/chassis/visibility plus typed JSONB, not a generic JSON bag |
+| Photo metadata/receipts/outbox | [00006](../backend/migrations/00006_setup_photos.sql), [00007](../backend/migrations/00007_photo_crops.sql) | Private file references and durable cleanup, detailed below |
 
-```text
-users
------
-id              UUID PK
-google_subject  TEXT UNIQUE NOT NULL
-email           TEXT UNIQUE NOT NULL
-nickname        TEXT UNIQUE NOT NULL
-avatar_url      TEXT NULL
-created_at      TIMESTAMPTZ NOT NULL
-updated_at      TIMESTAMPTZ NOT NULL
-```
+A NULL chassis means custom/unlisted/unspecified, not a synthetic catalog row.
+Deleting a user cascades setups; physical model deletion sets setup chassis NULL.
+Do not add a general JSONB GIN index without an actual JSON-field search requirement.
 
-Rules:
-- `google_subject` is the stable external identity key.
-- normalize email before persistence;
-- nickname uniqueness should be treated case-insensitively at the application/database boundary;
-- email uniqueness should also be case-insensitive;
-- admin status is NOT stored here.
+## Schema-v1 evolution and atomicity
 
-## 2. friendships
+Optional numbers remain pointer-backed: zero is a value, not absence. Supplied data
+PATCH replaces the entire technical document; legacy/unknown/explicit-zero and
+historical reference behavior must survive round trips. Empty new optional blocks
+are normalized before writes without reinterpreting unrelated legacy parents.
+Optional arm spacing, differential, shock hardware, knuckle, arm mounts and running
+gear live in the existing JSONB; no new columns/backfill were required for those
+extensions. Exact fields and validation belong to models/OpenAPI and their tests.
 
-```text
-friendships
------------
-id              UUID PK
-requester_id    UUID NOT NULL FK -> users.id
-addressee_id    UUID NOT NULL FK -> users.id
-status          TEXT NOT NULL
-created_at      TIMESTAMPTZ NOT NULL
-updated_at      TIMESTAMPTZ NOT NULL
-```
+Incompatible JSON evolution requires a new version, explicit old/new read and
+migration strategy, and regression tests before changing write defaults. Do not
+silently reinterpret unsupported stored versions.
 
-Allowed status for POC:
-- `pending`;
-- `accepted`.
-
-Rejecting a pending request may delete it. Removing a friendship deletes the accepted row.
-
-Constraints:
-- requester cannot equal addressee;
-- there can be only one friendship/request between the same unordered pair of users.
-
-Because `(A,B)` and `(B,A)` must not coexist, implement a PostgreSQL unique expression index using the UUID pair in deterministic order.
-
-Deleting a user should remove related friendship rows.
-
-## 3. chassis_brands
-
-Only admins create or modify catalog entries.
-
-```text
-chassis_brands
---------------
-id          UUID PK
-name        TEXT NOT NULL
-is_active   BOOLEAN NOT NULL DEFAULT TRUE
-created_at  TIMESTAMPTZ NOT NULL
-updated_at  TIMESTAMPTZ NOT NULL
-```
-
-Rules:
-- brand name unique case-insensitively;
-- do not physically delete catalog entries used by setups;
-- inactive brands cannot be selected for new setups;
-- existing setups keep displaying inactive historical catalog values.
-
-## 4. chassis_models
-
-```text
-chassis_models
---------------
-id          UUID PK
-brand_id    UUID NOT NULL FK -> chassis_brands.id
-name        TEXT NOT NULL
-is_active   BOOLEAN NOT NULL DEFAULT TRUE
-created_at  TIMESTAMPTZ NOT NULL
-updated_at  TIMESTAMPTZ NOT NULL
-```
-
-Rules:
-- model name unique case-insensitively within a brand;
-- inactive models cannot be selected for new setups;
-- brand relation uses `ON DELETE RESTRICT`.
-
-## 5. setups
-
-```text
-setups
-------
-id                  UUID PK
-owner_id            UUID NOT NULL FK -> users.id
-chassis_model_id    UUID NULL FK -> chassis_models.id
-title               TEXT NOT NULL
-visibility          TEXT NOT NULL
-data                JSONB NOT NULL
-notes               TEXT NULL
-schema_version      INTEGER NOT NULL DEFAULT 1
-created_at          TIMESTAMPTZ NOT NULL
-updated_at          TIMESTAMPTZ NOT NULL
-```
-
-Allowed visibility:
-- `public`;
-- `friends`;
-- `private`.
-
-Meaning of nullable `chassis_model_id`:
-
-```text
-NULL = custom chassis, unlisted chassis, or chassis intentionally not specified.
-```
-
-The POC intentionally does not distinguish those states.
-
-Rules:
-- `schema_version >= 1`;
-- initial setup schema version is `1`;
-- deleting a user deletes their setups;
-- catalog entries should normally be disabled rather than deleted;
-- if a chassis model is ever physically deleted, `chassis_model_id` may be set to NULL rather than deleting the setup.
-
-## Setup JSON schema v1
-
-The JSONB document is structured data, not an arbitrary JSON bag.
-
-Conceptual shape:
-
-```json
-{
-  "suspension": {
-    "front": {
-      "camber_deg": -5.5,
-      "caster_deg": 7.0,
-      "toe_deg": 1.0,
-      "link_lengths": [
-        {
-          "name": "camber_link",
-          "length_mm": 42.5
-        }
-      ]
-    },
-    "rear": {
-      "camber_deg": -2.0,
-      "caster_deg": null,
-      "toe_deg": 2.5,
-      "link_lengths": []
-    }
-  },
-  "shocks": {
-    "front": {
-      "manufacturer": "Yokomo",
-      "model": "Big Bore",
-      "spring": {
-        "manufacturer": "Yokomo",
-        "color": "Purple"
-      },
-      "oil_cst": 250
-    },
-    "rear": {
-      "manufacturer": "Yokomo",
-      "model": "Big Bore",
-      "spring": {
-        "manufacturer": "Yokomo",
-        "color": "Blue"
-      },
-      "oil_cst": 300
-    }
-  },
-  "electronics": {
-    "motor": "Acuvance Fledge 10.5T",
-    "esc": "Acuvance Xarvis XX",
-    "servo": "Reve D RS-ST",
-    "gyro": "Yokomo DP-302 V4",
-    "radio": "Futaba T10PX"
-  }
-}
-```
-
-Most technical fields should be optional. In Go, optional numeric fields must not use a plain numeric zero value because zero degrees is a legitimate setup value.
-
-For example:
-
-```go
-type AxleSuspension struct {
-    CamberDeg   *float64     `json:"camber_deg,omitempty"`
-    CasterDeg   *float64     `json:"caster_deg,omitempty"`
-    ToeDeg      *float64     `json:"toe_deg,omitempty"`
-    LinkLengths []LinkLength `json:"link_lengths,omitempty"`
-}
-```
-
-This preserves the difference between:
-- omitted/unknown;
-- exactly `0`.
-
-The same principle applies to oil viscosity and other numeric data.
-
-## Initial indexes
-
-Create only useful POC indexes:
-
-- users: case-insensitive unique email;
-- users: case-insensitive unique nickname;
-- friendships: requester;
-- friendships: addressee;
-- friendships: unique unordered user pair;
-- chassis_models: brand;
-- setups: owner;
-- setups: chassis_model;
-- setups: visibility;
-- setups: `(visibility, created_at DESC)` for public browsing/search.
-
-Do not add a general JSONB GIN index until a real JSON-field search requirement exists.
-
-## Transactions
-
-Use transactions for operations that must remain atomic, especially:
-- friendship acceptance if multiple rows/checks are involved;
-- catalog changes with dependent validation if needed.
-
-Simple single-row setup CRUD does not need an explicit transaction unless it performs multiple dependent writes.
-
-## Arm spacing schema-v1 extension
-
-Optional typed `top_arm_spacing`/`lower_arm_spacing` objects on each suspension
-axle live inside the existing `setups.data` JSONB document. `front_mm`/`rear_mm`
-are finite nonnegative total spacer thicknesses in mm; pointer-backed zero is
-preserved, unknown values omitted, empty blocks normalized before writes.
-The existing repository marshals/unmarshals DataV1 and replaces the whole JSONB
-value on data PATCH. No SQL columns/indexes/constraints change, so no migration
-or backfill is needed; schema_version remains 1. Existing documents without
-spacing keep their shape. Real PostgreSQL HTTP/repository tests inspect JSONB
-zero/decimal persistence, removal, legacy edits and rejected writes.
+Repositories own SQL. Use transactions for dependent writes/checks; ordinary
+single-row CRUD needs no extra transaction solely for uniformity. Photo mutations
+and their row-lock/publication/cleanup ordering below are deliberate exceptions.
+Use real disposable migrated PostgreSQL for JSONB, constraints, indexes and race
+coverage; commands/prerequisites live in [testing](testing.md).
 
 ## Setup photos (migration 00006)
 

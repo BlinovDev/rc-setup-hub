@@ -6,6 +6,7 @@ for startup commands; do not duplicate them in feature reports.
 
 ## Coding rules
 
+- Prefer table-driven unit tests for pure logic.
 - Standard Go formatting; context.Context at request/database boundaries; explicit
   dependency injection, no global mutable state/package database handle.
 - Typed visibility/friendship constants and optional numeric pointers; explicit

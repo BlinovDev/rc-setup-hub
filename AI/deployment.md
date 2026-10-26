@@ -109,20 +109,15 @@ nginx 26m API limit/120s read timeout, protected encryption keys and recovery.
 Provision codecs on the host from the selected backend's supported script; runner
 provisioning never prepares the VPS. Staging work cannot alter production resources.
 
-Before backup/migrations, run the actual candidate --check-media as its runtime user
-inside the strict sandbox. Keep the main-history gate first for production. Candidate
-health uses separate temporary loopbacks (staging 18181, production 18180); failure
-must not switch active links/receipt and prints only bounded redacted diagnostics.
-
-Snapshots pair DB and private media, including baseline/full AND current/referenced
-thumbnail-version directories, schema/decoder/release metadata and integrity hashes.
-Never infer media inventory solely from storage_key or restore a DB-only photo backup.
-Predeploy/daily jobs share environment locks; successful snapshots verify decryption,
-hashes and dump listing before reopening traffic. Failure stays stopped/maintenance
-closed and blocks migrations/activation. Retain seven daily and 30-day predeploy sets.
-Verify an isolated populated DB/media restore before relying on recovery. No automatic
-DB rollback, secret sharing or weakened health gate. Preparing the same active binary's
-host prerequisites is separate from deploying a new SHA pair; both need authorization.
+The host runbook is the single operational owner for
+[candidate preflight](../scripts/server/README.md#staging-host-prerequisites),
+[health and redacted diagnostics](../scripts/server/README.md#candidate-diagnostics-and-tests),
+[coherent DB+media snapshot/restore and retention](../scripts/server/README.md#coherent-snapshots),
+and [production isolation/preparation](../scripts/server/README.md#production-host-preparation).
+Follow those procedures in full; links do not waive fail-closed media checks,
+backup-before-migration, production main ancestry or explicit authorization.
+DB-only backups are not coherent photo recovery; do not cancel an in-flight deploy
+or perform automatic database rollback.
 
 Past staging/production incidents and task-specific readiness reports remain in
 [Git history](archive/README.md) and their linked Issues/PRs, not release instructions.
