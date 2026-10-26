@@ -52,4 +52,3 @@ func TestManufacturerNormalizationContract(t *testing.T) {
 		}
 	}
 }
-
