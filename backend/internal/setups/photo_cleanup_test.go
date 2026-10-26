@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,6 +52,27 @@ func TestPhotoMutationDoesNotSweepUnrelatedMedia(t *testing.T) {
 	}
 	if _, err := os.Stat(orphan); err != nil {
 		t.Fatal("no-op crop swept unrelated media", err)
+	}
+	if _, err := s.applyCrop(ctx, owner.ID, setup.ID, p.ID, CropInput{&expected, &photos.Crop{Size: 5}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(orphan); err != nil {
+		t.Fatal("changed crop swept unrelated media", err)
+	}
+	// Startup still rejects a missing referenced image and must not sweep after
+	// inventory verification fails. Restore the file before continuing.
+	full := filepath.Join(root, p.key, "full.jpg")
+	if err := os.Rename(full, full+".away"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReconcilePhotos(ctx); err == nil {
+		t.Fatal("missing referenced media did not fail reconciliation")
+	}
+	if _, err := os.Stat(orphan); err != nil {
+		t.Fatal("failed inventory swept unrelated media", err)
+	}
+	if err := os.Rename(full+".away", full); err != nil {
+		t.Fatal(err)
 	}
 	// More queued keys than one request may process. No files are needed for these
 	// already-missing publications; their durable rows still need acknowledgement.
@@ -103,6 +125,14 @@ func TestPhotoCleanupContinuesAfterFileFailure(t *testing.T) {
 	if err := os.Chmod(dir, 0500); err != nil {
 		t.Fatal(err)
 	}
+	orphan := filepath.Join(root, "ffffffffffffffffffffffffffffffff")
+	if err := os.Mkdir(orphan, 0700); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(orphan, old, old); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pool.Exec(ctx, `INSERT INTO setup_photo_deletions(storage_key) VALUES($1)`, blocked); err != nil {
 		t.Fatal(err)
 	}
@@ -116,6 +146,11 @@ func TestPhotoCleanupContinuesAfterFileFailure(t *testing.T) {
 	s.EnablePhotos(store)
 	if err := s.ReconcilePhotos(ctx); err == nil {
 		t.Fatal("filesystem failure did not fail reconciliation")
+	} else if strings.Contains(err.Error(), root) {
+		t.Fatal("cleanup error exposed private media path")
+	}
+	if _, err := os.Stat(orphan); err != nil {
+		t.Fatal("failed cleanup did not block sweeping", err)
 	}
 	var pending int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM setup_photo_deletions`).Scan(&pending); err != nil || pending != 1 {
