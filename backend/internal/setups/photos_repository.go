@@ -38,6 +38,21 @@ func (p *Photo) urls() {
 
 const photoColumns = `id::text,setup_id::text,storage_key,width,height,thumbnail_width,thumbnail_height,is_cover,created_at,crop,thumbnail_revision,COALESCE(thumbnail_key,storage_key)`
 
+// coverPhotoJSON is shared by joined setup/detail and search projections. Keep
+// storage keys private; urls() owns transport URLs, content type and UTC times.
+const coverPhotoJSON = `CASE WHEN cp.id IS NULL THEN NULL ELSE jsonb_build_object('id',cp.id,'setup_id',cp.setup_id,'width',cp.width,'height',cp.height,'thumbnail_width',cp.thumbnail_width,'thumbnail_height',cp.thumbnail_height,'crop',cp.crop,'thumbnail_revision',cp.thumbnail_revision,'is_cover',cp.is_cover,'created_at',cp.created_at) END`
+
+func decodeCoverPhoto(raw []byte) (*Photo, error) {
+	var p *Photo
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return nil, err
+	}
+	if p != nil {
+		p.urls()
+	}
+	return p, nil
+}
+
 func scanPhoto(row pgx.Row) (Photo, error) {
 	var p Photo
 	var raw []byte
