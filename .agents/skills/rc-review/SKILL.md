@@ -1,14 +1,17 @@
 ---
 name: "rc-review"
-description: "Independently review a diff for concrete correctness, security, regression, and maintainability issues. Read-only review; does not fix or approve merging."
+description: "Independently review a diff or an explicitly requested repository audit for concrete correctness, security, regression, and maintainability issues. Read-only; does not fix or approve merging."
 license: "MIT"
 ---
 
 # Independent engineering review
 
 Read applicable AGENTS.md and relevant AI decisions, architecture and testing requirements.
-Resolve the exact review scope and base/head revisions. Read the diff, surrounding flow,
-callers and tests independently of the implementer's explanation. Existing design decisions
+Resolve the exact review scope and base/head revisions. For an explicitly requested whole-repository
+audit, record the checkout SHA and working-tree state instead; inspect entry points, connected
+flows and tests, and report areas not inspected. An empty diff does not end a repository audit.
+For a diff review, read the diff, surrounding flow, callers and tests independently of the
+implementer's explanation. Existing design decisions
 are constraints, not permission to redesign. An implementer's self-check must be labeled as
 such; use a fresh review session when independent evidence is needed.
 
