@@ -2,13 +2,13 @@ package chassis
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"html/template"
 	"mime"
 	"net/http"
 
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/auth"
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/httpjson"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
 	admintemplates "github.com/BlinovDev/rc-setup-hub/backend/templates/admin"
 	"github.com/go-chi/chi/v5"
@@ -53,12 +53,6 @@ type selection struct {
 	Name string `json:"name"`
 }
 
-func sendJSON(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
-}
 func errorStatus(err error) int {
 	switch {
 	case errors.Is(err, ErrNotFound):
@@ -77,9 +71,7 @@ func apiError(w http.ResponseWriter, err error) {
 	if status == 500 {
 		message = "catalog unavailable"
 	}
-	sendJSON(w, status, struct {
-		Error string `json:"error"`
-	}{message})
+	httpjson.Error(w, status, message)
 }
 func (h *Handler) activeBrands(w http.ResponseWriter, r *http.Request) {
 	brands, err := h.service.ActiveBrands(r.Context())
@@ -91,7 +83,7 @@ func (h *Handler) activeBrands(w http.ResponseWriter, r *http.Request) {
 	for _, brand := range brands {
 		result = append(result, selection{brand.ID, brand.Name})
 	}
-	sendJSON(w, 200, result)
+	httpjson.Write(w, 200, result)
 }
 func (h *Handler) activeModels(w http.ResponseWriter, r *http.Request) {
 	models, err := h.service.ActiveModels(r.Context(), chi.URLParam(r, "brand_id"))
@@ -103,7 +95,7 @@ func (h *Handler) activeModels(w http.ResponseWriter, r *http.Request) {
 	for _, model := range models {
 		result = append(result, selection{model.ID, model.Name})
 	}
-	sendJSON(w, 200, result)
+	httpjson.Write(w, 200, result)
 }
 
 type catalogPage struct {

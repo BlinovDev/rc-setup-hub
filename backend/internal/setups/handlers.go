@@ -1,12 +1,12 @@
 package setups
 
 import (
-	"encoding/json"
 	"errors"
 	"mime"
 	"net/http"
 
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/auth"
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/httpjson"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -43,13 +43,7 @@ func (h *Handler) listUser(w http.ResponseWriter, r *http.Request) {
 		failure(w, err)
 		return
 	}
-	respond(w, 200, setups)
-}
-func respond(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
+	httpjson.Write(w, 200, setups)
 }
 func failure(w http.ResponseWriter, err error) {
 	var validation *ValidationError
@@ -64,16 +58,12 @@ func failure(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrConflict):
 		status, message = 409, ErrConflict.Error()
 	}
-	respond(w, status, struct {
-		Error string `json:"error"`
-	}{message})
+	httpjson.Error(w, status, message)
 }
 func owner(w http.ResponseWriter, r *http.Request) (string, bool) {
 	user, ok := auth.CurrentUser(r)
 	if !ok {
-		respond(w, 401, struct {
-			Error string `json:"error"`
-		}{"authentication required"})
+		httpjson.Error(w, 401, "authentication required")
 		return "", false
 	}
 	return user.ID, true
@@ -110,7 +100,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Location", "/api/v1/setups/"+setup.ID)
-	respond(w, http.StatusCreated, setup)
+	httpjson.Write(w, http.StatusCreated, setup)
 }
 func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 	id, ok := owner(w, r)
@@ -122,7 +112,7 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 		failure(w, err)
 		return
 	}
-	respond(w, 200, setup)
+	httpjson.Write(w, 200, setup)
 }
 func (h *Handler) patch(w http.ResponseWriter, r *http.Request) {
 	id, ok := owner(w, r)
@@ -142,7 +132,7 @@ func (h *Handler) patch(w http.ResponseWriter, r *http.Request) {
 		failure(w, err)
 		return
 	}
-	respond(w, 200, setup)
+	httpjson.Write(w, 200, setup)
 }
 func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := owner(w, r)
@@ -166,5 +156,5 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		failure(w, err)
 		return
 	}
-	respond(w, 200, result)
+	httpjson.Write(w, 200, result)
 }
