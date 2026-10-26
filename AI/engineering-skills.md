@@ -14,7 +14,7 @@ an explicitly scoped task.
 | `$rc-architect` | Explain ownership/boundaries and compare design choices | No; report only |
 | `$rc-regression` | Reproduce a defect and capture failing-before/passing-after evidence | Tests/fix within an authorized implementation task; a test-plan request alone stays read-only |
 | `$rc-blast-radius` | Find downstream impact and challenge the key safety assumption | No; evidence/report only |
-| `$rc-review` | Independently assess correctness, security and regressions | No; report only |
+| `$rc-review` | Independently assess a diff or explicitly requested repository audit for correctness, security and regressions | No; report only |
 | `$rc-thermo-review` | Strict architecture/maintainability quality audit | No; report only |
 
 Read applicable AGENTS.md files and the already-required AI context first, then
@@ -52,6 +52,11 @@ reports missing prerequisites instead of treating an environment failure as a
 reproduced bug. Review findings require concrete evidence, reachable impact and a
 bounded remedy; strictness is not a quota or a license for speculative rewrites.
 
+The current upstream home is [Thermos](https://github.com/cursor/plugins/tree/99b609a72323b70204eab407c622f436e858e112/thermos).
+The table and source records above identify the original adapted input, not a claim
+that the old package path remains current. Correctness review overlaps `rc-review`;
+do not install a second review/orchestration stack merely to follow the rename.
+
 ## Repeatable verification
 
 Run from this repository root with Python 3.9+ (standard library only):
@@ -70,6 +75,39 @@ changed notices and escaping paths. This proves packaging, **not** agent discove
 invocation, policy enforcement or review quality. It does not claim to validate all
 possible Agent Skills syntax. License hashes are preservation checks, not a legal
 or upstream authenticity certification; maintainers must inspect pinned inputs.
+
+### Fresh local Codex CLI discovery and invocation smoke
+
+Run from this repository root at the revision being verified. Record `codex --version`,
+`git rev-parse HEAD` and `git status --short` before and after. Use the installed CLI's
+`codex exec --help` to confirm options; the example requires `--ephemeral`, `--sandbox`
+and `--json`. Do not install or upgrade tools as part of a read-only smoke.
+
+Start a fresh process for discovery, before manually locating skill files:
+
+```sh
+codex exec --ephemeral --sandbox read-only --json \
+  'List the repository skills already present in your available skill catalog, with names, descriptions and paths. Do not infer discovery from AGENTS.md or a directory scan. If the six rc-* skills are absent, report NOT DISCOVERED. Do not read files, run commands, edit files or access remote services.'
+```
+
+Then run a separate fresh process for each explicit invocation prompt in the table
+below, using the same options and an actual `$rc-*` name, not a hard-coded path.
+For example:
+
+```sh
+codex exec --ephemeral --sandbox read-only --json \
+  'Use $rc-review. Audit the current repository read-only. Record checkout SHA and working-tree state, trace setup read authorization, and cite current code/tests. Do not edit, run tests, make remote writes, merge or deploy.'
+```
+
+Keep the JSON event transcript with the PR evidence. Require an actual tool read of
+the selected repository `SKILL.md`, code citations and the requested role boundaries.
+Mark discovery and each invocation PASS/FAIL/NOT RUN separately. Catalog output alone
+does not prove invocation; a successful explicit invocation does not prove implicit
+routing or hostile-write sandbox enforcement. Record inherited user/global/project
+instructions and configuration; this is not an isolated-install test. Missing CLI,
+startup/auth/network failures or absent tool traces are limitations, never PASS.
+An ephemeral session still uses the normal CLI configuration and authentication.
+Local success does not establish Cloud behavior; use the separate procedure below.
 
 ### Fresh Codex Cloud discovery and invocation smoke
 
