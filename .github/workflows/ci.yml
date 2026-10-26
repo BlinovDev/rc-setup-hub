@@ -13,6 +13,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  docs-skills:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify documentation links and routing
+        run: python3 scripts/verify-docs.py
+      - name: Test documentation validator
+        run: python3 -m unittest discover -s scripts -p 'test_docs.py' -v
+      - name: Verify engineering skill packaging and provenance
+        run: python3 scripts/verify-engineering-skills.py
+      - name: Test engineering skill validator
+        run: python3 -m unittest discover -s scripts -p 'test_engineering_skills.py' -v
+      - run: git diff --check
+
   test:
     runs-on: ubuntu-24.04
     defaults:
