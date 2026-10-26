@@ -193,34 +193,66 @@ func (r *Repository) mutatePhoto(ctx context.Context, ownerID, setupID, photoID 
 	}
 	return p, tx.Commit(ctx)
 }
-func (r *Repository) reconcilePhotos(ctx context.Context, store *photos.Store) error {
-	rows, err := r.pool.Query(ctx, `SELECT storage_key FROM setup_photo_deletions`)
+
+const photoCleanupBatchSize = 100
+
+// cleanupPhotoDeletions attempts one bounded page. The cursor advances past failed
+// keys too, so a full background pass cannot starve unrelated queued deletions.
+func (r *Repository) cleanupPhotoDeletions(ctx context.Context, store *photos.Store, after string) (string, error) {
+	rows, err := r.pool.Query(ctx, `SELECT storage_key FROM setup_photo_deletions WHERE storage_key>$1 ORDER BY storage_key LIMIT $2`, after, photoCleanupBatchSize)
 	if err != nil {
-		return err
+		return "", err
 	}
 	keys := []string{}
 	for rows.Next() {
 		var key string
 		if err := rows.Scan(&key); err != nil {
 			rows.Close()
-			return err
+			return "", err
 		}
 		keys = append(keys, key)
 	}
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
-		return err
+		return "", err
 	}
+	failed := false
 	for _, key := range keys {
 		if err := store.Remove(key); err != nil {
-			return err
+			failed = true
+			continue
 		}
 		if _, err := r.pool.Exec(ctx, `DELETE FROM setup_photo_deletions WHERE storage_key=$1`, key); err != nil {
-			return err
+			return "", err
 		}
 	}
-	rows, err = r.pool.Query(ctx, `SELECT storage_key,COALESCE(thumbnail_key,storage_key) FROM setup_photos`)
+	next := ""
+	if len(keys) == photoCleanupBatchSize {
+		next = keys[len(keys)-1]
+	}
+	if failed {
+		// Filesystem errors can contain private paths; only return a safe summary.
+		return next, errors.New("photo file cleanup failed; queued deletions retained")
+	}
+	return next, nil
+}
+
+func (r *Repository) reconcilePhotos(ctx context.Context, store *photos.Store) error {
+	failed := false
+	for after := ""; ; {
+		next, err := r.cleanupPhotoDeletions(ctx, store, after)
+		failed = failed || err != nil
+		if next == "" {
+			break
+		}
+		after = next
+	}
+	if failed {
+		// Preserve fail-closed startup and never sweep after incomplete cleanup.
+		return errors.New("photo cleanup failed; queued deletions retained")
+	}
+	rows, err := r.pool.Query(ctx, `SELECT storage_key,COALESCE(thumbnail_key,storage_key) FROM setup_photos`)
 	if err != nil {
 		return err
 	}

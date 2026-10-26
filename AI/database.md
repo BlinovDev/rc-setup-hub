@@ -262,8 +262,12 @@ rename before the metadata transaction. Commit-outcome uncertainty retains files
 retry reads the receipt. Unreferenced publication/temp directories older than one
 hour are reconciled; never sweep unless the DB inventory query succeeded.
 
-Normal startup reconciles before accepting requests; a one-minute worker and
-delete paths retry cleanup. Storage failures never silently create usable-looking
+Normal startup reconciles before accepting requests; a one-minute worker retries
+the complete deletion queue in keyset pages of 100 before inventory verification
+and orphan sweeping. Individual file failures retain their rows without blocking
+later pages; any cleanup failure still fails startup closed. Delete and changed-crop
+requests attempt only one page, without global inventory checks or sweeping;
+no-op crops do no cleanup. Storage failures never silently create usable-looking
 photo metadata. Private runtime-owned storage is outside release/static roots;
 restores must include consistent database AND media, not DB-only backups.
 Migration down drops photo metadata/receipts/outbox and is destructive; archive

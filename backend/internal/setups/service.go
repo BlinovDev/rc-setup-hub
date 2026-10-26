@@ -169,7 +169,7 @@ func (s *Service) Delete(ctx context.Context, ownerID, id string) error {
 		return err
 	}
 	if s.photos != nil {
-		_ = s.ReconcilePhotos(ctx)
+		s.cleanupPhotos(ctx)
 	}
 	return nil
 }

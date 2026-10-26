@@ -27,8 +27,8 @@ func (s *Service) applyCrop(ctx context.Context, ownerID, setupID, photoID strin
 	if !keep && generated != "" {
 		_ = s.photos.Remove(generated)
 	}
-	if err == nil {
-		_ = s.ReconcilePhotos(ctx)
+	if err == nil && generated != "" {
+		s.cleanupPhotos(ctx)
 	}
 	return p, err
 }
