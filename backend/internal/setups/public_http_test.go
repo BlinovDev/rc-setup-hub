@@ -182,7 +182,7 @@ func TestAnonymousPublicHTTP(t *testing.T) {
 		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &page) != nil {
 			t.Fatal("page", w.Code, w.Body)
 		}
-		for _, word := range []string{"email", "google_subject", "storage_key", "thumbnail_key", "incoming", "accepted", "private_count"} {
+		for _, word := range []string{"email", "google_subject", "data", "notes", "storage_key", "thumbnail_key", "incoming", "accepted", "private_count"} {
 			if strings.Contains(w.Body.String(), "\""+word+"\"") {
 				t.Fatal("unsafe projection", word)
 			}
@@ -255,12 +255,21 @@ func TestAnonymousPublicHTTP(t *testing.T) {
 		t.Fatal("origin bypass", w.Code)
 	}
 	// More restrictive visibility immediately revokes known full/thumbnail/gallery/detail URLs.
-	if _, err := pool.Exec(ctx, `UPDATE setups SET visibility='private' WHERE id=$1`, records[0].ID); err != nil {
-		t.Fatal(err)
-	}
-	for _, path := range []string{"/api/v1/setups/" + records[0].ID, "/api/v1/setups/" + records[0].ID + "/photos", images[0].URL, images[0].ThumbnailURL} {
-		if w := request(router, "GET", path, "", nil); w.Code != 404 {
-			t.Fatal("stale public URL", path, w.Code)
+	for _, visibility := range []Visibility{Friends, Private} {
+		if _, err := pool.Exec(ctx, `UPDATE setups SET visibility=$2 WHERE id=$1`, records[0].ID, visibility); err != nil {
+			t.Fatal(err)
+		}
+		for _, path := range []string{"/api/v1/setups/" + records[0].ID, "/api/v1/setups/" + records[0].ID + "/photos", images[0].URL, images[0].ThumbnailURL} {
+			if w := request(router, "GET", path, "", nil); w.Code != 404 {
+				t.Fatal("stale public URL", visibility, path, w.Code)
+			}
+			want := 404
+			if visibility == Friends {
+				want = 200
+			}
+			if w := request(router, "GET", path, "", friend.cookie); w.Code != want {
+				t.Fatal("friend transition parity", visibility, w.Code)
+			}
 		}
 	}
 	// Friendship removal revokes authenticated media without changing public access.

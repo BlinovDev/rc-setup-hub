@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"bytes"
 	"context"
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/config"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -42,6 +45,18 @@ func TestAnonymousReadBudget(t *testing.T) {
 	handler.ServeHTTP(w, r)
 	if w.Code != 200 {
 		t.Fatal("budget did not refill", w.Code)
+	}
+	for i := 0; i < 29; i++ {
+		w = httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if w.Code != 200 {
+			t.Fatal("early refill exhaustion", i)
+		}
+	}
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code != 429 {
+		t.Fatal("refill exceeds 30/s")
 	}
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, httptest.NewRequest("GET", "/?q="+strings.Repeat("x", 2048), nil))
@@ -85,5 +100,65 @@ func TestAnonymousBudgetIsRaceSafe(t *testing.T) {
 	wg.Wait()
 	if limits.tokens < 0 || limits.tokens > 120 {
 		t.Fatal("invalid token balance")
+	}
+}
+
+type deadlineRecorder struct {
+	*httptest.ResponseRecorder
+	deadlines []time.Time
+}
+
+func (w *deadlineRecorder) SetWriteDeadline(value time.Time) error {
+	w.deadlines = append(w.deadlines, value)
+	return nil
+}
+func TestAnonymousWriteDeadlineAndSlotRelease(t *testing.T) {
+	limits := newPublicReadLimits()
+	now := time.Now()
+	limits.now = func() time.Time { return now }
+	w := &deadlineRecorder{ResponseRecorder: httptest.NewRecorder()}
+	limits.guard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })).ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	if len(w.deadlines) != 2 || !w.deadlines[0].Equal(now.Add(15*time.Second)) || !w.deadlines[1].IsZero() || len(limits.slots) != 0 {
+		t.Fatal("unbounded/unreleased write", w.deadlines, len(limits.slots))
+	}
+}
+
+func TestExpiredSessionIsGuestOnlyOnPublicReads(t *testing.T) {
+	now := time.Now()
+	h := NewHandler(config.Auth{AppURL: &url.URL{Scheme: "http", Host: "localhost:5173"}, GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SessionSecret: bytes.Repeat([]byte("e"), 32)}, nil, nil)
+	h.sessions.now = func() time.Time { return now }
+	issued := httptest.NewRecorder()
+	if err := h.sessions.Issue(issued, httptest.NewRequest("GET", "/", nil), "11111111-1111-4111-8111-111111111111"); err != nil {
+		t.Fatal(err)
+	}
+	var cookie *http.Cookie
+	for _, c := range issued.Result().Cookies() {
+		if c.Name == "rc_session" {
+			cookie = c
+		}
+	}
+	if cookie == nil {
+		t.Fatal("missing session")
+	}
+	now = now.Add(25 * time.Hour)
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(cookie)
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		if _, ok := CurrentUser(r); ok {
+			t.Fatal("expired identity retained")
+		}
+	})
+	w := httptest.NewRecorder()
+	h.OptionalUser(next).ServeHTTP(w, req)
+	if !called || w.Code != 200 {
+		t.Fatal("expired public session did not become guest")
+	}
+	called = false
+	w = httptest.NewRecorder()
+	h.RequireUser(next).ServeHTTP(w, req)
+	if called || w.Code != 401 {
+		t.Fatal("expired protected session accepted")
 	}
 }
