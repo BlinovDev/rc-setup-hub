@@ -174,15 +174,24 @@ no migration/defaults; full-data replacement and compatibility requirements appl
 All sections and most technical fields are optional. Omitted/null optional
 numeric fields mean unknown and are omitted on output; **toe_deg: 0 is a real
 value preserved by pointer-backed Go structs**. Optional null sections/technical
-strings and empty strings/lists are omitted on output. Link entries use the existing ordered
-`link_lengths[{name,length_mm?}]` array (max 100 per axle). Name is trimmed/non-empty
-(max 200); omitted/null length is unknown and omitted on output, while a supplied
-length must be finite and strictly positive (zero is invalid). Named unknown links
-are retained. New UI conventions are `upper_arm`/`lower_arm` on both axles and front
-`steering_tie_rod`; do not inject defaults, rename/deduplicate legacy/custom labels
-or forbid existing custom rear labels. Angles/lengths coexist, full-data PATCH still
-replaces the document, and Compare returns the same ordered arrays without defaults.
-Missing-value display/filtering stays frontend-owned. Supplied oil_cst
+strings and empty strings/lists are omitted on output. Fixed standard measurements
+are `upper_arm_length_mm`/`lower_arm_length_mm` on both axles and front-only
+`steering_tie_rod_length_mm`. They have stable identities like angles; values may
+be unset (null/omitted, omitted on output), or finite/strictly positive. No defaults
+or fake named rows are injected. Zero length remains invalid; zero angles/spacers
+retain their existing meaning. Numeric rear steering tie rod is rejected.
+
+`link_lengths[{name,length_mm?}]` remains the ordered additional-custom/legacy list
+(max 100, trimmed non-empty name max 200; optional finite positive length). Reads,
+Compare and title-only edits never rename/promote/deduplicate legacy rows. FE may
+map a unique exact historical `upper_arm`/`lower_arm` (front also `steering_tie_rod`)
+row into its fixed input when the typed value is absent, then explicitly remove
+that converted row in the same full-data PATCH. Duplicate/other labels are custom
+and must be preserved, not guessed. A set typed value plus its exact historical
+row is rejected to prevent duplicate canonical storage. Unset fixed values with
+no legacy row mean unknown; do not create default custom entries. Full-data PATCH
+still replaces the document. Compare returns typed fields and unchanged arrays;
+FE owns semantic alignment, missing-value filtering and display. Supplied oil_cst
 must be positive. Angles are finite without narrow drift-domain bounds. Detail
 schema_version is 1; clients cannot choose it. No version history exists.
 

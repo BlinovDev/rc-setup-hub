@@ -105,13 +105,16 @@ type LowerArmMount struct {
 }
 
 type AxleSuspension struct {
-	LowerArmMount   *LowerArmMount `json:"lower_arm_mount,omitempty"`
-	TopArmSpacing   *ArmSpacing    `json:"top_arm_spacing,omitempty"`
-	LowerArmSpacing *ArmSpacing    `json:"lower_arm_spacing,omitempty"`
-	CamberDeg       *float64       `json:"camber_deg,omitempty"`
-	CasterDeg       *float64       `json:"caster_deg,omitempty"`
-	ToeDeg          *float64       `json:"toe_deg,omitempty"`
-	LinkLengths     []LinkLength   `json:"link_lengths,omitempty"`
+	UpperArmLengthMM       *float64       `json:"upper_arm_length_mm,omitempty"`
+	LowerArmLengthMM       *float64       `json:"lower_arm_length_mm,omitempty"`
+	SteeringTieRodLengthMM *float64       `json:"steering_tie_rod_length_mm,omitempty"`
+	LowerArmMount          *LowerArmMount `json:"lower_arm_mount,omitempty"`
+	TopArmSpacing          *ArmSpacing    `json:"top_arm_spacing,omitempty"`
+	LowerArmSpacing        *ArmSpacing    `json:"lower_arm_spacing,omitempty"`
+	CamberDeg              *float64       `json:"camber_deg,omitempty"`
+	CasterDeg              *float64       `json:"caster_deg,omitempty"`
+	ToeDeg                 *float64       `json:"toe_deg,omitempty"`
+	LinkLengths            []LinkLength   `json:"link_lengths,omitempty"`
 }
 
 // UnmarshalJSON tracks explicit null blocks so normalization can omit their empty parents.

@@ -57,3 +57,29 @@ func TestLinkLengthsRequestContract(t *testing.T) {
 		}
 	}
 }
+
+func TestFixedStandardLengthRequests(t *testing.T) {
+	document, err := libopenapi.NewDocument(api.OpenAPI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer document.Release()
+	check, errs := validator.NewValidator(document, config.WithFormatAssertions())
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	defer check.Release()
+	for _, axle := range []string{"front", "rear"} {
+		for _, field := range []string{"upper_arm_length_mm", "lower_arm_length_mm", "steering_tie_rod_length_mm"} {
+			for _, value := range []string{"null", "16.2123456789", "0", "-1", `"16.2"`} {
+				validExpected := value == "null" || (value == "16.2123456789" && (axle == "front" || field != "steering_tie_rod_length_mm"))
+				request := httptest.NewRequest("PATCH", "/api/v1/setups/11111111-1111-4111-8111-111111111111", strings.NewReader(`{"data":{"suspension":{"`+axle+`":{"`+field+`":`+value+`}}}}`))
+				request.Header.Set("Content-Type", "application/json")
+				request.AddCookie(&http.Cookie{Name: "rc_session", Value: "contract"})
+				if valid, errs := check.ValidateHttpRequest(request); valid != validExpected {
+					t.Fatalf("%s %s %s: %v %+v", axle, field, value, valid, errs)
+				}
+			}
+		}
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -89,6 +90,72 @@ func TestLinkLengthsPersistenceHTTPAndCompare(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// First-class standard values coexist with custom rows and all existing spacing.
+	// Conversion is explicit: do not retain the old reserved-name standard rows.
+	var fixed DataV1
+	if err := json.Unmarshal(raw, &fixed); err != nil {
+		t.Fatal(err)
+	}
+	fixed.Suspension.Front.UpperArmLengthMM = floatPtr(42.123456789)
+	fixed.Suspension.Front.LowerArmLengthMM = floatPtr(38.5)
+	fixed.Suspension.Front.SteeringTieRodLengthMM = floatPtr(16.2)
+	fixed.Suspension.Rear.UpperArmLengthMM = floatPtr(50.1)
+	fixed.Suspension.Rear.LowerArmLengthMM = floatPtr(55.9)
+	fixed.Suspension.Front.LinkLengths = []LinkLength{{Name: "Custom unknown"}, {Name: "Old upper label", LengthMM: floatPtr(19.123456789)}}
+	fixed.Suspension.Rear.LinkLengths = []LinkLength{{Name: "Rear extra", LengthMM: floatPtr(22.2)}}
+	fixedRaw, err := json.Marshal(fixed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	typed := setupResponse(t, request(router, "POST", "/api/v1/setups", `{"title":"Fixed lengths","visibility":"public","data":`+string(fixedRaw)+`}`, owner), 201)
+	for _, cookie := range []*http.Cookie{nil, owner, friend} {
+		read := setupResponse(t, request(router, "GET", "/api/v1/setups/"+typed.ID, "", cookie), 200)
+		if !reflect.DeepEqual(read.Data, fixed) {
+			t.Fatal("fixed detail lost data")
+		}
+		w := request(router, "GET", "/api/v1/setups/compare?left_id="+typed.ID+"&right_id="+right.ID, "", cookie)
+		var pair Comparison
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &pair) != nil || !reflect.DeepEqual(pair.Left.Data, fixed) || !reflect.DeepEqual(pair.Right.Data, replacement) {
+			t.Fatal("fixed/legacy Compare compatibility", w.Code, w.Body)
+		}
+	}
+	var persisted DataV1
+	var stored []byte
+	if err := f.pool.QueryRow(ctx, `SELECT data FROM setups WHERE id=$1`, typed.ID).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if json.Unmarshal(stored, &persisted) != nil || !reflect.DeepEqual(persisted, fixed) {
+		t.Fatal("fixed JSONB roundtrip")
+	}
+	typed = setupResponse(t, request(router, "PATCH", "/api/v1/setups/"+typed.ID, `{"title":"New title"}`, owner), 200)
+	if !reflect.DeepEqual(typed.Data, fixed) {
+		t.Fatal("title PATCH dropped fixed values/spacing")
+	}
+	// Failed replacements must preserve the entire technical document.
+	for _, bad := range []string{`{"upper_arm_length_mm":0}`, `{"lower_arm_length_mm":-1}`, `{"upper_arm_length_mm":42,"link_lengths":[{"name":"upper_arm","length_mm":42}]}`} {
+		w := request(router, "PATCH", "/api/v1/setups/"+typed.ID, `{"data":{"suspension":{"front":`+bad+`}}}`, owner)
+		if w.Code != 400 {
+			t.Fatal("bad fixed write accepted", w.Code, w.Body)
+		}
+		current, err := f.service.Get(ctx, f.owner.ID, typed.ID)
+		if err != nil || !reflect.DeepEqual(current.Data, fixed) {
+			t.Fatal("bad fixed PATCH lost data", err)
+		}
+	}
+	fixed.Suspension.Front.LowerArmLengthMM = nil
+	fixed.Suspension.Rear.UpperArmLengthMM = nil
+	fixedRaw, err = json.Marshal(fixed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	typed = setupResponse(t, request(router, "PATCH", "/api/v1/setups/"+typed.ID, `{"data":`+string(fixedRaw)+`}`, owner), 200)
+	if !reflect.DeepEqual(typed.Data, fixed) || *typed.Data.Suspension.Front.TopArmSpacing.FrontMM != 0 || *typed.Data.Suspension.Front.TopArmSpacing.RearMM != 5.2 {
+		t.Fatal("clear fixed values modified shims/siblings")
+	}
+	if _, err := f.service.Patch(ctx, f.friend.ID, typed.ID, PatchInput{Title: NullableString{Present: true, Value: stringPtr("Forbidden")}}); !errors.Is(err, ErrNotFound) {
+		t.Fatal("fixed fields granted writes", err)
+	}
+
 	for _, tc := range []struct {
 		name   string
 		cookie *http.Cookie
@@ -172,4 +239,37 @@ func TestLinkLengthsPersistenceHTTPAndCompare(t *testing.T) {
 	if w := request(router, "PATCH", "/api/v1/setups/"+right.ID, `{"title":"Forbidden"}`, owner); w.Code != 404 {
 		t.Fatal("Compare granted write", w.Code)
 	}
+	// Explicitly convert an unambiguous old document without touching custom rows,
+	// spacing or any other technical value. No read-side promotion is performed.
+	legacyCopy, err := f.service.Create(ctx, f.owner.ID, CreateInput{Title: "Convert legacy", Visibility: Private, Data: &data})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var converted DataV1
+	if err := json.Unmarshal(raw, &converted); err != nil {
+		t.Fatal(err)
+	}
+	converted.Suspension.Front.UpperArmLengthMM = converted.Suspension.Front.LinkLengths[0].LengthMM
+	converted.Suspension.Front.LowerArmLengthMM = converted.Suspension.Front.LinkLengths[1].LengthMM
+	converted.Suspension.Front.SteeringTieRodLengthMM = converted.Suspension.Front.LinkLengths[2].LengthMM
+	converted.Suspension.Front.LinkLengths = converted.Suspension.Front.LinkLengths[3:]
+	converted.Suspension.Rear.UpperArmLengthMM = converted.Suspension.Rear.LinkLengths[0].LengthMM
+	converted.Suspension.Rear.LowerArmLengthMM = converted.Suspension.Rear.LinkLengths[1].LengthMM
+	converted.Suspension.Rear.LinkLengths = converted.Suspension.Rear.LinkLengths[2:]
+	convertedRaw, err := json.Marshal(converted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := setupResponse(t, request(router, "PATCH", "/api/v1/setups/"+legacyCopy.ID, `{"data":`+string(convertedRaw)+`}`, owner), 200)
+	if !reflect.DeepEqual(saved.Data, converted) || !reflect.DeepEqual(saved.Data.Suspension.Front.LinkLengths, data.Suspension.Front.LinkLengths[3:]) || !reflect.DeepEqual(saved.Data.Suspension.Front.TopArmSpacing, data.Suspension.Front.TopArmSpacing) {
+		t.Fatal("explicit conversion damaged custom/spacing data")
+	}
+	pair, err := f.service.Compare(ctx, f.owner.ID, saved.ID, right.ID)
+	if err != nil || !reflect.DeepEqual(pair.Left.Data, converted) {
+		t.Fatal("converted comparison", err)
+	}
+	if _, err := f.service.Compare(ctx, "", saved.ID, right.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatal("converted private data leaked", err)
+	}
+
 }
