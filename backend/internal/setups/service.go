@@ -107,7 +107,7 @@ func (s *Service) ListUser(ctx context.Context, callerID, ownerID string) ([]Set
 	}
 	ownerID = uuid.String()
 	accepted := false
-	if callerID != ownerID {
+	if callerID != "" && callerID != ownerID {
 		var err error
 		accepted, err = s.friends.AreAccepted(ctx, callerID, ownerID)
 		if err != nil {

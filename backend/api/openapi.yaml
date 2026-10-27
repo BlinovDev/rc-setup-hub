@@ -2,11 +2,11 @@ openapi: 3.1.0
 info:
   title: RC Setup Hub frontend API
   version: 1.0.0
-  description: 'Phase 11 contract for the separately developed frontend. JSON API
+  description: 'Contract for the separately developed frontend. JSON API
     uses backend-managed HttpOnly rc_session cookies. Google OAuth -> backend callback
     -> session cookie -> 303 APP_URL. Frontend requests require credentials: "include"
     and an exact ALLOWED_ORIGINS entry. No Google tokens are delivered to the frontend;
-    never use localStorage auth. All /api/v1 endpoints require a session. Error bodies
+    never use localStorage auth. Only explicitly documented GET operations allow guests; all other API operations require a session. Error bodies
     are {"error":"human-readable message"}. Browser mutations require a trusted configured
     Origin; admin HTML routes are separate and not documented here.'
 servers:
@@ -184,11 +184,12 @@ paths:
               $ref: '#/components/schemas/PatchMe'
   /api/v1/users/{user_id}:
     get:
+      security: []
       operationId: getPublicUser
       summary: Get an application user's public profile
       tags:
         - Users
-      description: Authenticated lookup for direct frontend profile URLs. Returns only id, nickname and nullable avatar_url, without email, provider identity or friendship state.
+      description: Guest or authenticated lookup for direct frontend profile URLs, including users with no public setups. Returns only id, nickname and nullable avatar_url, without email, provider identity or friendship state.
       parameters:
         - name: user_id
           in: path
@@ -198,6 +199,10 @@ paths:
             type: string
             format: uuid
       responses:
+        '414':
+          $ref: '#/components/responses/PublicURITooLong'
+        '429':
+          $ref: '#/components/responses/PublicReadsBusy'
         "200":
           description: Public profile.
           content:
@@ -206,8 +211,6 @@ paths:
                 $ref: '#/components/schemas/PublicProfile'
         "400":
           $ref: '#/components/responses/BadRequest'
-        "401":
-          $ref: '#/components/responses/Unauthorized'
         "404":
           $ref: '#/components/responses/NotFound'
         "500":
@@ -364,11 +367,16 @@ paths:
           description: Resource UUID.
   /api/v1/chassis/brands:
     get:
+      security: []
       operationId: listChassisBrands
       summary: List active brands
       tags:
         - Chassis
       responses:
+        '414':
+          $ref: '#/components/responses/PublicURITooLong'
+        '429':
+          $ref: '#/components/responses/PublicReadsBusy'
         "200":
           description: Success
           content:
@@ -377,19 +385,22 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ChassisBrand'
-        "401":
-          $ref: '#/components/responses/Unauthorized'
         "500":
           $ref: '#/components/responses/InternalError'
       description: Selection API returns active brands only. Custom/not listed is
         a client-only synthetic option, represented in setups by chassis_model_id=null.
   /api/v1/chassis/brands/{brand_id}/models:
     get:
+      security: []
       operationId: listChassisModels
       summary: List active models under an active brand
       tags:
         - Chassis
       responses:
+        '414':
+          $ref: '#/components/responses/PublicURITooLong'
+        '429':
+          $ref: '#/components/responses/PublicReadsBusy'
         "200":
           description: Success
           content:
@@ -400,8 +411,6 @@ paths:
                   $ref: '#/components/schemas/ChassisModel'
         "400":
           $ref: '#/components/responses/BadRequest'
-        "401":
-          $ref: '#/components/responses/Unauthorized'
         "404":
           $ref: '#/components/responses/NotFound'
         "500":
@@ -450,11 +459,16 @@ paths:
               $ref: '#/components/schemas/CreateSetup'
   /api/v1/setups/{id}:
     get:
+      security: []
       operationId: getSetup
       summary: Read a visible setup
       tags:
         - Setups
       responses:
+        '414':
+          $ref: '#/components/responses/PublicURITooLong'
+        '429':
+          $ref: '#/components/responses/PublicReadsBusy'
         "200":
           description: Success
           content:
@@ -463,8 +477,6 @@ paths:
                 $ref: '#/components/schemas/Setup'
         "400":
           $ref: '#/components/responses/BadRequest'
-        "401":
-          $ref: '#/components/responses/Unauthorized'
         "404":
           $ref: '#/components/responses/NotFound'
         "500":
@@ -472,7 +484,7 @@ paths:
       description: Owner sees every visibility. Other authenticated users see public;
         accepted friends also see friends-only. Private remains owner-only; pending
         relationships grant no access. Missing/inaccessible returns the same 404,
-        before protected technical data decoding. Public still requires authentication.
+        before protected technical data decoding. Guests see public only. Successful public detail is index-eligible; non-public detail and all errors remain noindex.
       parameters:
         - name: id
           in: path
@@ -606,11 +618,16 @@ paths:
           description: Resource UUID.
   /api/v1/setups/search:
     get:
+      security: []
       operationId: searchPublicSetups
       summary: Browse/search public setups
       tags:
         - Setups
       responses:
+        '414':
+          $ref: '#/components/responses/PublicURITooLong'
+        '429':
+          $ref: '#/components/responses/PublicReadsBusy'
         "200":
           description: Success
           content:
@@ -619,11 +636,9 @@ paths:
                 $ref: '#/components/schemas/SetupSearchPage'
         "400":
           $ref: '#/components/responses/BadRequest'
-        "401":
-          $ref: '#/components/responses/Unauthorized'
         "500":
           $ref: '#/components/responses/InternalError'
-      description: 'Authenticated PUBLIC discovery only: even owner/accepted friend
+      description: 'PUBLIC discovery for guests and authenticated users: even owner/accepted friend
         never receives private/friends setups here. Filters combine with AND; disagreeing
         brand/model returns zero results. Custom chassis matches only unfiltered queries.
         Inactive historical catalog values remain searchable and displayable. Ordered
@@ -687,6 +702,7 @@ paths:
       security: []
   /api/v1/setups/{id}/photos:
     get:
+      security: []
       operationId: listSetupPhotos
       summary: List authorized gallery in upload order
       parameters:
@@ -697,6 +713,10 @@ paths:
           type: string
           format: uuid
       responses:
+        '414':
+          $ref: '#/components/responses/PublicURITooLong'
+        '429':
+          $ref: '#/components/responses/PublicReadsBusy'
         '200':
           description: Success
           content:
@@ -707,8 +727,6 @@ paths:
                   $ref: '#/components/schemas/SetupPhoto'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '500':
@@ -894,9 +912,10 @@ paths:
           description: Deleted; cleanup queued durably if filesystem removal fails
   /api/v1/setups/{id}/photos/{photo_id}/image:
     get:
+      security: []
       operationId: readSetupPhotoImage
       summary: Read authorized processed JPEG
-      description: Checks current session and setup visibility on every read. No public static
+      description: Resolves an optional session and checks current setup visibility on every read; guests see public only. No public static
         media. Cache-Control no-store, private; no ETag/Last-Modified. Lost access and unknown
         photo are identical 404.
       parameters:
@@ -913,6 +932,10 @@ paths:
           type: string
           format: uuid
       responses:
+        '414':
+          $ref: '#/components/responses/PublicURITooLong'
+        '429':
+          $ref: '#/components/responses/PublicReadsBusy'
         '200':
           description: JPEG bytes; no-store, private
           content:
@@ -922,17 +945,16 @@ paths:
                 format: binary
         '400':
           $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/setups/{id}/photos/{photo_id}/thumbnail:
     get:
+      security: []
       operationId: readSetupPhotoThumbnail
       summary: Read authorized processed JPEG
-      description: Checks current session and setup visibility on every read. No public static
+      description: Resolves an optional session and checks current setup visibility on every read; guests see public only. No public static
         media. Cache-Control no-store, private; no ETag/Last-Modified. Lost access and unknown
         photo are identical 404.
       parameters:
@@ -949,6 +971,10 @@ paths:
           type: string
           format: uuid
       responses:
+        '414':
+          $ref: '#/components/responses/PublicURITooLong'
+        '429':
+          $ref: '#/components/responses/PublicReadsBusy'
         '200':
           description: JPEG bytes; no-store, private
           content:
@@ -958,12 +984,84 @@ paths:
                 format: binary
         '400':
           $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/users/{user_id}/public-setups:
+    get:
+      security: []
+      operationId: listPublicUserSetups
+      summary: List public setups for one safe owner profile
+      tags:
+      - Users
+      - Setups
+      responses:
+        '414':
+          $ref: '#/components/responses/PublicURITooLong'
+        '429':
+          $ref: '#/components/responses/PublicReadsBusy'
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupSearchPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: Public-only for every viewer, including the owner and accepted friends. Returns bounded
+        SetupSearchPage summaries without technical data, email, hidden counts or friendship state. Same
+        validated filters, cursor ordering and 20/default, 50/maximum limit as Explore. Missing user and
+        user without public setups both return an empty page. The existing /users/{user_id}/setups endpoint
+        remains authenticated and visibility-dependent.
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+        description: Trimmed literal case-insensitive substring of title OR owner nickname. Empty/omitted
+          means no text filter; percent/underscore are literal. No null bytes. Never searches email, notes
+          or technical data.
+      - name: brand_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Filter by historical parent brand. Valid nonexistent UUID yields zero results.
+      - name: model_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Filter by exact historical chassis model. Valid nonexistent UUID yields zero results.
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+        description: Maximum page size.
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Opaque next-page cursor from the previous response. Invalid cursor returns 400. Repeat
+          q/brand_id/model_id and desired limit on subsequent requests.
 components:
   securitySchemes:
     CookieAuth:
@@ -2042,6 +2140,23 @@ components:
             $ref: '#/components/schemas/APIError'
     InternalError:
       description: Unexpected failure; no internal error details.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+    PublicURITooLong:
+      description: Guest request URI exceeds 2048 bytes; authenticated requests retain existing limits.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+    PublicReadsBusy:
+      description: Anonymous process-wide rate or concurrency budget exhausted. Retry later; no per-IP forwarding header is trusted.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            const: 1
       content:
         application/json:
           schema:

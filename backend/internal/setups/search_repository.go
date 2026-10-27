@@ -15,12 +15,12 @@ func (r *Repository) searchPublic(ctx context.Context, params searchParameters) 
  FROM setups s JOIN users u ON u.id=s.owner_id
  LEFT JOIN chassis_models m ON m.id=s.chassis_model_id
  LEFT JOIN chassis_brands b ON b.id=m.brand_id LEFT JOIN setup_photos cp ON cp.setup_id=s.id AND cp.is_cover
- WHERE s.visibility='public'
+ WHERE s.visibility='public' AND ($7::uuid IS NULL OR s.owner_id=$7)
  AND ($1::text='' OR strpos(lower(s.title),lower($1))>0 OR strpos(lower(u.nickname),lower($1))>0)
  AND ($2::uuid IS NULL OR b.id=$2)
  AND ($3::uuid IS NULL OR s.chassis_model_id=$3)
  AND ($4::timestamptz IS NULL OR (s.created_at,s.id)<($4::timestamptz,$5::uuid))
- ORDER BY s.created_at DESC,s.id DESC LIMIT $6`, params.query, params.brandID, params.modelID, cursorTime, cursorID, params.limit+1)
+ ORDER BY s.created_at DESC,s.id DESC LIMIT $6`, params.query, params.brandID, params.modelID, cursorTime, cursorID, params.limit+1, params.ownerID)
 	if err != nil {
 		return nil, err
 	}

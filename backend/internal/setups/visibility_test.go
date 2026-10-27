@@ -12,7 +12,7 @@ func TestVisibilityPolicy(t *testing.T) {
 		{"accepted friend", "other", true, [3]bool{true, true, false}},
 		{"unrelated", "other", false, [3]bool{true, false, false}},
 		{"pending friend", "other", false, [3]bool{true, false, false}},
-		{"unauthenticated", "", true, [3]bool{false, false, false}},
+		{"unauthenticated", "", true, [3]bool{true, false, false}},
 	} {
 		for i, visibility := range []Visibility{Public, Friends, Private} {
 			t.Run(caller.name+"/"+string(visibility), func(t *testing.T) {

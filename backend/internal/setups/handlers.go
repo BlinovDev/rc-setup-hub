@@ -14,23 +14,40 @@ type Handler struct{ service *Service }
 
 func NewHandler(service *Service) *Handler { return &Handler{service: service} }
 
-// RegisterAPI mounts authenticated setup routes; mutations remain owner-only.
+// RegisterAPI retains the authenticated-only registration for existing callers.
 func (h *Handler) RegisterAPI(r chi.Router) {
-	if h.service.photos != nil {
-		r.Get("/setups/{id}/photos", h.gallery)
-		r.Post("/setups/{id}/photos", h.upload)
-		r.Put("/setups/{id}/photos/{photo_id}/cover", h.coverPhoto)
-		r.Put("/setups/{id}/photos/{photo_id}/crop", h.cropPhoto)
-		r.Delete("/setups/{id}/photos/{photo_id}", h.deletePhoto)
-		r.Get("/setups/{id}/photos/{photo_id}/{variant:image|thumbnail}", h.photoImage)
-	}
-	r.Post("/setups", h.create)
+	h.RegisterPublicAPI(r)
+	h.RegisterPrivateAPI(r)
+}
+
+// RegisterPublicAPI is the explicit GET-only public allowlist; data checks stay in services/SQL.
+func (h *Handler) RegisterPublicAPI(r chi.Router) {
 	r.Get("/setups/search", h.search)
 	r.Get("/setups/{id}", h.get)
+	r.Get("/users/{user_id}/public-setups", h.publicUserSetups)
+	if h.service.photos != nil {
+		r.Get("/setups/{id}/photos", h.gallery)
+		r.Get("/setups/{id}/photos/{photo_id}/{variant:image|thumbnail}", h.photoImage)
+	}
+}
+func (h *Handler) RegisterPrivateAPI(r chi.Router) {
+	r.Post("/setups", h.create)
 	r.Patch("/setups/{id}", h.patch)
 	r.Delete("/setups/{id}", h.delete)
 	r.Get("/me/setups", h.list)
 	r.Get("/users/{user_id}/setups", h.listUser)
+	if h.service.photos != nil {
+		r.Post("/setups/{id}/photos", h.upload)
+		r.Put("/setups/{id}/photos/{photo_id}/cover", h.coverPhoto)
+		r.Put("/setups/{id}/photos/{photo_id}/crop", h.cropPhoto)
+		r.Delete("/setups/{id}/photos/{photo_id}", h.deletePhoto)
+	}
+}
+
+// viewer never manufactures an owner identity for a guest.
+func viewer(r *http.Request) string {
+	user, _ := auth.CurrentUser(r)
+	return user.ID
 }
 
 func (h *Handler) listUser(w http.ResponseWriter, r *http.Request) {
@@ -103,14 +120,14 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	httpjson.Write(w, http.StatusCreated, setup)
 }
 func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
-	id, ok := owner(w, r)
-	if !ok {
-		return
-	}
+	id := viewer(r)
 	setup, err := h.service.Get(r.Context(), id, chi.URLParam(r, "id"))
 	if err != nil {
 		failure(w, err)
 		return
+	}
+	if setup.Visibility == Public {
+		w.Header().Set("X-Robots-Tag", "index, follow")
 	}
 	httpjson.Write(w, 200, setup)
 }

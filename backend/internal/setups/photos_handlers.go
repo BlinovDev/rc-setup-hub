@@ -61,9 +61,13 @@ func photoFailure(w http.ResponseWriter, err error) {
 	failure(w, err)
 }
 func photoIDs(w http.ResponseWriter, r *http.Request) (string, string, string, bool) {
-	caller, ok := owner(w, r)
-	if !ok {
-		return "", "", "", false
+	caller := viewer(r)
+	if r.Method != http.MethodGet {
+		var ok bool
+		caller, ok = owner(w, r)
+		if !ok {
+			return "", "", "", false
+		}
 	}
 	setupID, photoID := chi.URLParam(r, "id"), chi.URLParam(r, "photo_id")
 	if err := validID(setupID); err != nil {
@@ -232,5 +236,8 @@ func (h *Handler) photoImage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Content-Disposition", "inline")
 	// No ETag/Last-Modified or conditional 304 caching for sensitive content.
+	r = r.Clone(r.Context())
+	r.Header.Del("If-None-Match")
+	r.Header.Del("If-Modified-Since")
 	http.ServeContent(w, r, "photo.jpg", time.Time{}, f)
 }

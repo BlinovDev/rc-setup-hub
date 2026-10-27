@@ -6,11 +6,11 @@ implemented frontend API; admin HTML is separate. Keep it aligned with handlers,
 transport DTOs, status/error mappings and tests. The separate frontend repository
 should generate TypeScript types from this contract, not recreate DTOs manually.
 
-JSON application endpoints use `/api/v1`, require a backend-owned session cookie,
+JSON application endpoints use `/api/v1`; protected operations require a backend-owned session cookie,
 and return JSON errors shaped as `{"error":"human-readable message"}` without
 internal PostgreSQL/auth details. Profile/resource/error JSON uses
 `Cache-Control: no-store`. Browser requests need `credentials: "include"` and an
-exact configured CORS origin. No anonymous public browsing exists.
+exact configured CORS origin. The explicit [anonymous GET allowlist](#anonymous-public-reads-issue-42) is the only exception.
 
 ## Health and documentation
 
@@ -43,14 +43,14 @@ hyphens (up to 40 characters). A uniqueness collision adds a random suffix with
 bounded retries. No frontend onboarding is required; nickname remains editable.
 
 Session lifetime/cookie, token validation, CSRF and origin rules are maintained in
-[architecture/security](architecture.md#authentication-and-security). All API calls
+[architecture/security](architecture.md#authentication-and-security). Protected API calls
 remain authenticated and credentialed; token/provider internals are never public.
 
 ## Public user profile
 
-`GET /api/v1/users/{user_id}` requires authentication and returns only the existing
+`GET /api/v1/users/{user_id}` permits guests and returns only the existing
 PublicProfile fields: id, nickname and nullable avatar_url. Existing user is 200,
-invalid UUID 400, valid missing user 404, missing session 401, unexpected database
+invalid UUID 400, valid missing user 404, unexpected database
 failure generic 500. No email, Google subject or friendship information is
 selected or exposed. This supports reloading a frontend /users/:userId route.
 
@@ -103,7 +103,7 @@ Models require an active parent; brand_id is immutable on rename. Forms retain
   with active model and brand. Title trimmed/non-empty/max 150 characters; notes
   max 10,000 characters; technical strings trimmed/max 200. No null bytes in text.
 - `GET /api/v1/setups/{id}`: 200 complete Setup when visible. Owner sees all;
-  public is visible to authenticated users; friends to accepted friends; private
+  public is visible to guests and authenticated users; friends to accepted friends; private
   owner-only. Unknown/inaccessible uses identical 404 before protected data decode.
 - `PATCH /api/v1/setups/{id}`: owner-only, 200 complete Setup. Omitted top-level
   fields are unchanged; explicit null clears chassis_model_id or notes only.
@@ -129,7 +129,7 @@ one query without per-setup lookups. Active-only selection rules remain unchange
 Visibility is exactly public/friends/private. Create/PATCH are strict
 application/json objects, max 256 KiB; malformed/unknown fields (including
 owner_id/schema_version) are 400. Write authorization remains owner-only even
-for accepted friends/public readers. Authentication absence is 401; invalid
+for accepted friends/public readers. Protected-operation authentication absence is 401; invalid
 UUID/input 400; internal errors generic 500. Untrusted browser mutation origin 403.
 
 ### Technical schema v1
@@ -181,7 +181,7 @@ schema_version is 1; clients cannot choose it. No version history exists.
 
 ## Public setup discovery
 
-`GET /api/v1/setups/search`: authenticated and **public only**, even for the owner
+`GET /api/v1/setups/search`: guest or authenticated and **public only**, even for the owner
 or an accepted friend. SQL filters visibility before any protected data decoding.
 
 Parameters:
@@ -243,7 +243,7 @@ Existing schema-v1 documents without spacing remain unchanged and need no defaul
 
 ## Setup photo APIs (Issue #5)
 
-All routes use the existing credentialed cookie/session and mutation-origin
+Writes use the existing credentialed cookie/session and mutation-origin
 checks. Multipart uploads have their own bounded parser; technical data remains
 strict 256 KiB JSON/full-replacement PATCH. Never include photos in technical data.
 
@@ -258,10 +258,10 @@ strict 256 KiB JSON/full-replacement PATCH. Never include photos in technical da
 - PUT /api/v1/setups/{id}/photos/{photo_id}/cover: owner-only, no body, 200 SetupPhoto.
 - DELETE /api/v1/setups/{id}/photos/{photo_id}: owner-only, 204; cover fallback is
   oldest remaining. File deletion failures retain a durable cleanup queue.
-- GET .../{photo_id}/image or /thumbnail: authenticated authorized processed JPEG,
+- GET .../{photo_id}/image or /thumbnail: currently authorized processed JPEG (public for guests),
   Cache-Control: no-store, private; nosniff; no ETag/Last-Modified or 304 cache reuse.
 
-401 missing session; 403 untrusted mutation origin; 400 invalid UUID/multipart,
+401 missing session on protected operations; 403 untrusted mutation origin; 400 invalid UUID/multipart,
 unsupported/corrupt/oversized image or ten-photo limit; 404 missing/inaccessible
 setup/photo or non-owner mutation; 409 idempotency conflict; 503 upload capacity
 busy (two concurrent uploads per process); 500 processing/storage/DB failure,
@@ -272,7 +272,7 @@ Prior downloads/in-flight authorized responses cannot be revoked retroactively.
 Setup and SetupSearchItem include cover_photo: SetupPhoto|null in the same joined
 query (including My setups and visible profile lists). Schema-v1 is unchanged.
 SetupPhoto exposes ID/setup ID, full/thumbnail dimensions, image/jpeg, is_cover,
-created_at and authenticated relative url/thumbnail_url. Generated storage keys
+created_at and current-authorized relative url/thumbnail_url. Generated storage keys
 and filesystem paths are never exposed. Gallery is a separate resource.
 Refresh gallery/detail/list/search cover state after immediate photo mutations.
 New frontend creation saves once, uploads against returned ID with per-file
@@ -344,3 +344,59 @@ joins current historical names (including inactive brands) outside JSONB.
 No migration/version bump is needed for additive optional fields; deploy backend
 support before clients write them. Old strict backends cannot decode new fields,
 and old clients replacing the entire data document can discard them.
+
+## Anonymous public reads (Issue #42)
+
+Only these GET operations resolve an **optional** session:
+
+- `/api/v1/setups/search`: existing bounded public-only `SetupSearchPage`.
+- `/api/v1/setups/{id}`: complete public technical data; owner/friend permissions
+  still apply when a valid session is supplied. Missing/inaccessible is the same 404.
+- `/api/v1/users/{user_id}`: id, nickname, nullable avatar only, including users
+  without public setups. Missing user is 404; no email/provider/friendship/counts.
+- `/api/v1/users/{user_id}/public-setups`: public-only `SetupSearchPage` for **every**
+  viewer. Same q/brand/model/limit/cursor validation and ordering as Explore, default
+  20/max 50. Missing user and no public setups both yield an empty page. This separate
+  summary endpoint preserves the existing authenticated `/users/{user_id}/setups`
+  array and its owner/friend visibility behavior.
+- `/api/v1/setups/{id}/photos` and `/photos/{photo_id}/{image|thumbnail}` under that
+  setup: current visibility checked in SQL and again before delivery; gallery <=10.
+- `/api/v1/chassis/brands` and `/chassis/brands/{brand_id}/models`: active catalog
+  selectors for Explore filters; historical display remains on setup projections.
+
+No other API operation becomes anonymous. In particular `/me` still returns 401
+when signed out; `/me/setups`, visibility-dependent profile lists, nickname search,
+friendships, account operations, uploads/crop/cover/delete and admin remain protected.
+HEAD is not an anonymous GET alias. OPTIONS retains exact-origin CORS preflight.
+Absent, expired or invalid sessions are guests on public reads; an identity-store
+failure returns generic 500 rather than silently downgrading an authenticated read.
+Clients should still use `credentials: include` for JSON and image/blob requests to
+retain owner/friend access. Public media also works without credentials. Changing
+visibility, removing friendship or deleting records revokes subsequent origin reads;
+previously downloaded bytes cannot be revoked. No static media alias is introduced.
+
+Anonymous reads share a per-process token bucket: burst 120, refill 30/s, max 16
+in flight, 2048-byte request URI, 5s context and 15s write deadline. Overload is 429
+with Retry-After: 1 (CORS-exposed); oversized URI is 414. Memory is constant, no
+attacker-controlled IP map or trusted X-Forwarded-For/X-Real-IP assumptions. This is
+a conservative aggregate origin budget, not a distributed/per-IP firewall; a busy
+proxy shares it. Operators can separately authorize edge controls after assessing
+real traffic. Valid sessions retain existing limits. Search uses parameterized SQL,
+public visibility/owner filters before projections, keyset pagination and no OFFSET
+or hidden-record counts; substring search may still scan public titles/nicknames.
+
+### SEO and cache ownership
+
+Origin responses use no-store; processed media additionally stays private/nosniff
+with no ETag/Last-Modified or cache-validation 304. Public setup-detail 200 responses
+carry X-Robots-Tag: index, follow. Non-public detail, errors, profiles, API collections,
+media, account/admin/auth routes default to noindex, nofollow. Eligibility is not a
+promise that JSON API responses or JS-only frontend HTML are indexed.
+
+The frontend/deployment owns `/` Explore, canonical setup HTML URLs, page titles,
+descriptions/social metadata, robots.txt and any sitemap. Only currently public
+setup URLs may be listed; build it from public discovery, never owner/private lists.
+Friends/private/account/auth pages must remain noindex, including stale SPA state.
+nginx serves the frontend HTML, so API headers do not automatically reach those
+pages. Verify rendered HTML separately; SSR/prerender is a separate architecture
+choice, not silently added here. No backend sitemap or crawler cache is introduced.

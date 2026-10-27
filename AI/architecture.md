@@ -48,6 +48,9 @@ for atomicity, keys/indexes, photo receipts/outbox and migration/rollback constr
   including future mutations, with separate signed HttpOnly `/admin` cookie, SameSite=Lax,
   Secure setting and strict HTTPS Origin/Referer checks. Only library-generated
   CSRFField is trusted HTML; user strings stay escaped. Forms accept hidden token/header.
+- Only the explicit GET registrations in [API](api.md#anonymous-public-reads-issue-42)
+  permit optional sessions. All mutations/account/friendship/admin paths retain required
+  authentication. Guest reads have bounded aggregate work; forwarding headers are not trusted.
 - Public profiles expose safe application UUID/nickname/avatar only. Owner email and
   provider identity never appear in public setup/profile/search projections.
 - JSON responses and admin HTML use no-store; unexpected errors remain generic.
