@@ -118,6 +118,21 @@ func (s *Service) Search(ctx context.Context, input SearchInput) (SearchPage, er
 	}
 	return publicPage(items, params.limit), nil
 }
+
+// SearchVisible selects candidates from every setup readable by this viewer.
+// It never changes Explore's deliberately public-only search behavior.
+func (s *Service) SearchVisible(ctx context.Context, viewerID string, input SearchInput) (SearchPage, error) {
+	params, err := normalizeSearch(input)
+	if err != nil {
+		return SearchPage{}, err
+	}
+	items, err := s.repo.searchVisible(ctx, viewerID, params)
+	if err != nil {
+		return SearchPage{}, err
+	}
+	return publicPage(items, params.limit), nil
+}
+
 func publicPage(items []SearchItem, limit int) SearchPage {
 	page := SearchPage{Items: items}
 	if len(items) > limit {

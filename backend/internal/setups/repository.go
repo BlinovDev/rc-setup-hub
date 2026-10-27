@@ -138,9 +138,10 @@ func (r *Repository) getAccess(ctx context.Context, id string) (accessMetadata, 
 }
 
 // getAuthorized decodes only a row whose metadata still matches the authorized read.
-// A visibility or owner change between reads fails closed, including more restrictive changes.
-func (r *Repository) getAuthorized(ctx context.Context, id string, access accessMetadata) (Setup, error) {
-	return scan(r.pool.QueryRow(ctx, `SELECT `+displayColumns+` FROM setups s`+displayJoins+` WHERE s.id=$1 AND s.owner_id=$2 AND s.visibility=$3`, id, access.OwnerID, access.Visibility))
+// Owner/visibility changes fail closed. The shared scope also rechecks friendship
+// acceptance in this statement, before any protected document is decoded.
+func (r *Repository) getAuthorized(ctx context.Context, id string, access accessMetadata, viewerID string) (Setup, error) {
+	return scan(r.pool.QueryRow(ctx, `SELECT `+displayColumns+` FROM setups s`+displayJoins+` WHERE s.id=$1 AND s.owner_id=$2 AND s.visibility=$3 AND `+visibleSetupPredicate("$4"), id, access.OwnerID, access.Visibility, viewerID))
 }
 
 func (r *Repository) ListOwned(ctx context.Context, ownerID string) ([]Setup, error) {

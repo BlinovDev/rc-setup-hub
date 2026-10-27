@@ -61,7 +61,7 @@ func TestOpenAPIContract(t *testing.T) {
 		"/api/v1/setups/{id}/photos/{photo_id}/cover":     {"put"},
 		"/api/v1/setups/{id}/photos/{photo_id}/image":     {"get"},
 		"/api/v1/setups/{id}/photos/{photo_id}/thumbnail": {"get"},
-		"/api/v1/me/setups":                               {"get"}, "/api/v1/users/{user_id}/setups": {"get"}, "/api/v1/setups/search": {"get"},
+		"/api/v1/me/setups":                               {"get"}, "/api/v1/users/{user_id}/setups": {"get"}, "/api/v1/setups/search": {"get"}, "/api/v1/setups/visible": {"get"}, "/api/v1/setups/compare": {"get"},
 	} {
 		for _, method := range methods {
 			op, exists := contract.Paths[path][method]
@@ -70,7 +70,7 @@ func TestOpenAPIContract(t *testing.T) {
 				continue
 			}
 			if strings.HasPrefix(path, "/api/v1/") {
-				public := method == "get" && (path == "/api/v1/users/{user_id}" || path == "/api/v1/users/{user_id}/public-setups" || path == "/api/v1/chassis/brands" || path == "/api/v1/chassis/brands/{brand_id}/models" || path == "/api/v1/setups/search" || path == "/api/v1/setups/{id}" || path == "/api/v1/setups/{id}/photos" || path == "/api/v1/setups/{id}/photos/{photo_id}/image" || path == "/api/v1/setups/{id}/photos/{photo_id}/thumbnail")
+				public := method == "get" && (path == "/api/v1/users/{user_id}" || path == "/api/v1/users/{user_id}/public-setups" || path == "/api/v1/chassis/brands" || path == "/api/v1/chassis/brands/{brand_id}/models" || path == "/api/v1/setups/search" || path == "/api/v1/setups/visible" || path == "/api/v1/setups/compare" || path == "/api/v1/setups/{id}" || path == "/api/v1/setups/{id}/photos" || path == "/api/v1/setups/{id}/photos/{photo_id}/image" || path == "/api/v1/setups/{id}/photos/{photo_id}/thumbnail")
 				security, overridden := op["security"]
 				if public {
 					values, ok := security.([]any)
@@ -83,7 +83,7 @@ func TestOpenAPIContract(t *testing.T) {
 			}
 		}
 	}
-	for _, name := range []string{"SetupPhoto", "User", "PublicProfile", "ChassisBrand", "ChassisModel", "Setup", "SetupDataV1", "SteeringKnuckle", "RearDifferential", "DifferentialManufacturer", "Suspension", "AxleSuspension", "RunningGear", "AxleRunningGear", "Hex", "Wheel", "Tire", "RunningGearManufacturers", "AxleRunningGearManufacturers", "LowerArmMount", "LowerArmMountManufacturers", "LinkLength", "Shocks", "Shock", "ShockPiston", "ShockSeal", "Spring", "Electronics", "SetupSearchItem", "SetupSearchChassis", "SetupSearchPage", "FriendshipRelationship", "FriendshipItem", "FriendshipList", "APIError"} {
+	for _, name := range []string{"SetupPhoto", "User", "PublicProfile", "ChassisBrand", "ChassisModel", "Setup", "SetupDataV1", "SteeringKnuckle", "RearDifferential", "DifferentialManufacturer", "Suspension", "AxleSuspension", "RunningGear", "AxleRunningGear", "Hex", "Wheel", "Tire", "RunningGearManufacturers", "AxleRunningGearManufacturers", "LowerArmMount", "LowerArmMountManufacturers", "LinkLength", "Shocks", "Shock", "ShockPiston", "ShockSeal", "Spring", "Electronics", "SetupSearchItem", "SetupSearchChassis", "SetupSearchPage", "SetupComparison", "FriendshipRelationship", "FriendshipItem", "FriendshipList", "APIError"} {
 		if _, exists := contract.Components.Schemas[name]; !exists {
 			t.Errorf("missing schema %s", name)
 		}

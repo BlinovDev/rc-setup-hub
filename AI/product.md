@@ -39,6 +39,13 @@ are indistinguishable. Reads do not grant modification rights. Explore is public
 safe owner profiles show nickname/avatar and public setups without hidden counts.
 Only public setup pages are index-eligible; login is prompted for protected actions.
 
+Comparison selects and reads exactly two distinct setups from the same visibility
+matrix across all owners. Selection is paginated and rechecks current access; both
+comparison sides are authorized together or neither is returned. Different/historical
+and custom chassis are allowed. Reads preserve all optional technical data and notes,
+including explicit zero versus unknown, without saving a comparison or granting clone
+or mutation permissions. Explore remains public-only.
+
 There is one pending/accepted relationship per unordered user pair; no self-friendship.
 Only the pending addressee accepts. Requester cancels, addressee rejects, either
 accepted participant removes. Pending grants nothing; removal revokes friends access.

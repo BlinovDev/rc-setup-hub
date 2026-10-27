@@ -97,7 +97,7 @@ func (s *Service) Get(ctx context.Context, callerID, id string) (Setup, error) {
 	if !CanView(callerID, access.OwnerID, access.Visibility, accepted) {
 		return Setup{}, ErrNotFound
 	}
-	return s.repo.getAuthorized(ctx, id, access)
+	return s.repo.getAuthorized(ctx, id, access, callerID)
 }
 
 func (s *Service) ListUser(ctx context.Context, callerID, ownerID string) ([]Setup, error) {

@@ -74,6 +74,8 @@ func TestTransportContract(t *testing.T) {
 	relationship := friendships.Relationship{ID: id, RequesterID: id, AddresseeID: "22222222-2222-4222-8222-222222222222", Status: friendships.Pending, CreatedAt: now, UpdatedAt: now}
 	item := friendships.Item{ID: id, User: profile, CreatedAt: now, UpdatedAt: now}
 	summary := setups.SearchItem{CoverPhoto: photo, ID: id, Title: "Public setup", Visibility: setups.Public, SchemaVersion: 1, CreatedAt: now, UpdatedAt: now, Owner: profile}
+	otherSetup := setup
+	otherSetup.ID = "22222222-2222-4222-8222-222222222222"
 	for _, tc := range []struct {
 		path  string
 		value any
@@ -88,6 +90,8 @@ func TestTransportContract(t *testing.T) {
 		{"/api/v1/users/" + id + "/setups", []setups.Setup{historical}},
 		{"/api/v1/friendships", friendships.List{Incoming: []friendships.Item{item}, Outgoing: []friendships.Item{}, Accepted: []friendships.Item{}}},
 		{"/api/v1/setups/search", setups.SearchPage{Items: []setups.SearchItem{summary}}},
+		{"/api/v1/setups/visible", setups.SearchPage{Items: []setups.SearchItem{summary}}},
+		{"/api/v1/setups/compare?left_id=" + id + "&right_id=22222222-2222-4222-8222-222222222222", setups.Comparison{Left: setup, Right: otherSetup}},
 		{"/api/v1/setups/search", setups.SearchPage{Items: []setups.SearchItem{}}},
 		{"/api/v1/users/" + id + "/public-setups", setups.SearchPage{Items: []setups.SearchItem{summary}}},
 	} {
