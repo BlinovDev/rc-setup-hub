@@ -186,8 +186,8 @@ func normalizeSuspension(data *DataV1) error {
 		for i := range axle.LinkLengths {
 			link := &axle.LinkLengths[i]
 			link.Name = strings.TrimSpace(link.Name)
-			if link.Name == "" || !validText(link.Name, 200) || !finite(link.LengthMM) || link.LengthMM <= 0 {
-				return invalid("link lengths require a name and length_mm greater than zero")
+			if link.Name == "" || !validText(link.Name, 200) || (link.LengthMM != nil && (!finite(*link.LengthMM) || *link.LengthMM <= 0)) {
+				return invalid("link lengths require a name and any supplied length_mm must be greater than zero")
 			}
 		}
 	}

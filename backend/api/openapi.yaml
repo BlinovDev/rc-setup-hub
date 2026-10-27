@@ -1532,7 +1532,14 @@ components:
           items:
             $ref: '#/components/schemas/LinkLength'
           maxItems: 100
-          description: Omitted/null/empty lists are omitted in responses.
+          description: >-
+            Omitted/null/empty lists are omitted in responses. Existing ordered
+            named-link array for both axles; no stored defaults are injected.
+            New UI standard names are upper_arm and lower_arm on either axle,
+            plus steering_tie_rod on the front only. These are naming conventions,
+            not an enum or a restriction on legacy/custom rear link names. Preserve
+            existing names and order, including duplicate/legacy labels; do not
+            rename or merge entries. Angles and lengths may coexist independently.
         top_arm_spacing:
           anyOf:
             - $ref: '#/components/schemas/ArmSpacing'
@@ -1591,18 +1598,32 @@ components:
     LinkLength:
       type: object
       additionalProperties: false
+      description: >-
+        Standard or custom named suspension link. Name is required; length is
+        optional. A named entry with unknown length remains in the ordered array.
+        Existing numeric lengths keep their precision and shape. Zero is invalid
+        for a supplied length; do not coerce missing/empty input to zero. No new
+        discriminator, separate arm/tie-rod fields or schema version is needed.
       properties:
         name:
           type: string
           minLength: 1
           maxLength: 200
-          description: Trimmed non-empty name without null bytes.
+          description: Trimmed non-empty free-text name without null bytes; not renamed or deduplicated.
         length_mm:
-          type: number
+          type:
+            - number
+            - "null"
           exclusiveMinimum: 0
+          description: Optional finite positive millimetres. Omitted/null means unknown and is omitted on output.
       required:
         - name
-        - length_mm
+      examples:
+        - name: upper_arm
+          length_mm: 42.5
+        - name: lower_arm
+        - name: steering_tie_rod
+          length_mm: 16.2
     Shocks:
       type: object
       additionalProperties: false

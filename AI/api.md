@@ -174,8 +174,15 @@ no migration/defaults; full-data replacement and compatibility requirements appl
 All sections and most technical fields are optional. Omitted/null optional
 numeric fields mean unknown and are omitted on output; **toe_deg: 0 is a real
 value preserved by pointer-backed Go structs**. Optional null sections/technical
-strings and empty strings/lists are omitted on output. Link entries require a
-trimmed non-empty name and positive length_mm (max 100 per axle); supplied oil_cst
+strings and empty strings/lists are omitted on output. Link entries use the existing ordered
+`link_lengths[{name,length_mm?}]` array (max 100 per axle). Name is trimmed/non-empty
+(max 200); omitted/null length is unknown and omitted on output, while a supplied
+length must be finite and strictly positive (zero is invalid). Named unknown links
+are retained. New UI conventions are `upper_arm`/`lower_arm` on both axles and front
+`steering_tie_rod`; do not inject defaults, rename/deduplicate legacy/custom labels
+or forbid existing custom rear labels. Angles/lengths coexist, full-data PATCH still
+replaces the document, and Compare returns the same ordered arrays without defaults.
+Missing-value display/filtering stays frontend-owned. Supplied oil_cst
 must be positive. Angles are finite without narrow drift-domain bounds. Detail
 schema_version is 1; clients cannot choose it. No version history exists.
 

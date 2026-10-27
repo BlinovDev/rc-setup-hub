@@ -144,8 +144,8 @@ func (a *AxleSuspension) UnmarshalJSON(raw []byte) error {
 }
 
 type LinkLength struct {
-	Name     string  `json:"name"`
-	LengthMM float64 `json:"length_mm"`
+	Name     string   `json:"name"`
+	LengthMM *float64 `json:"length_mm,omitempty"`
 }
 type Shocks struct {
 	Front *Shock `json:"front,omitempty"`
