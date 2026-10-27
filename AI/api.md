@@ -350,6 +350,17 @@ and old clients replacing the entire data document can discard them.
 Only these GET operations resolve an **optional** session:
 
 - `/api/v1/setups/search`: existing bounded public-only `SetupSearchPage`.
+- `/api/v1/setups/visible`: same bounded search/filter/page contract, but all setups
+  readable by this viewer across owners. Guests public-only; signed-in owners all
+  their own plus public and accepted-friend friends visibility. Safe summaries only.
+- `/api/v1/setups/compare?left_id=UUID&right_id=UUID`: exactly two distinct UUIDs,
+  each parameter once, no extras. Complete existing Setup objects as `{left,right}`
+  in request order. Single-statement authorization of both sides before decode;
+  generic 404 with neither side if either is missing/inaccessible, 400 for invalid
+  pairs. No-store, no index eligibility, no stored comparison or diff calculation.
+  Optional numeric values remain absent when unknown and zero when explicitly zero.
+  Selector/detail/final comparison share the read scope; selection is no capability.
+  Clone/owner mutation policy and independent media checks remain unchanged.
 - `/api/v1/setups/{id}`: complete public technical data; owner/friend permissions
   still apply when a valid session is supplied. Missing/inaccessible is the same 404.
 - `/api/v1/users/{user_id}`: id, nickname, nullable avatar only, including users

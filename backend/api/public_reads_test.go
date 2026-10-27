@@ -24,7 +24,7 @@ func TestPublicReadTransportContract(t *testing.T) {
 	}
 	defer validate.Release()
 	id := "11111111-1111-4111-8111-111111111111"
-	for _, path := range []string{"/api/v1/setups/search?limit=1", "/api/v1/users/" + id, "/api/v1/users/" + id + "/public-setups?limit=50", "/api/v1/setups/" + id, "/api/v1/setups/" + id + "/photos", "/api/v1/setups/" + id + "/photos/" + id + "/image", "/api/v1/setups/" + id + "/photos/" + id + "/thumbnail", "/api/v1/chassis/brands", "/api/v1/chassis/brands/" + id + "/models"} {
+	for _, path := range []string{"/api/v1/setups/search?limit=1", "/api/v1/setups/visible?limit=1", "/api/v1/setups/compare?left_id=" + id + "&right_id=22222222-2222-4222-8222-222222222222", "/api/v1/users/" + id, "/api/v1/users/" + id + "/public-setups?limit=50", "/api/v1/setups/" + id, "/api/v1/setups/" + id + "/photos", "/api/v1/setups/" + id + "/photos/" + id + "/image", "/api/v1/setups/" + id + "/photos/" + id + "/thumbnail", "/api/v1/chassis/brands", "/api/v1/chassis/brands/" + id + "/models"} {
 		req := httptest.NewRequest("GET", path, nil) // Deliberately no cookie.
 		if valid, errs := validate.ValidateHttpRequest(req); !valid || len(errs) > 0 {
 			t.Fatalf("guest request %s: %+v", path, errs)

@@ -23,6 +23,8 @@ func (h *Handler) RegisterAPI(r chi.Router) {
 // RegisterPublicAPI is the explicit GET-only public allowlist; data checks stay in services/SQL.
 func (h *Handler) RegisterPublicAPI(r chi.Router) {
 	r.Get("/setups/search", h.search)
+	r.Get("/setups/visible", h.visibleSearch)
+	r.Get("/setups/compare", h.compare)
 	r.Get("/setups/{id}", h.get)
 	r.Get("/users/{user_id}/public-setups", h.publicUserSetups)
 	if h.service.photos != nil {

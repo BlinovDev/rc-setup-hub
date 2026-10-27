@@ -219,14 +219,14 @@ func TestDetailMetadataChangeFailsClosed(t *testing.T) {
 			if _, err := pool.Exec(ctx, `UPDATE setups SET owner_id=$2,visibility=$3,schema_version=2,data='[]'::jsonb WHERE id=$1`, setup.ID, tc.ownerAfter, tc.after); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := repo.getAuthorized(ctx, setup.ID, access); !errors.Is(err, ErrNotFound) {
+			if _, err := repo.getAuthorized(ctx, setup.ID, access, setup.OwnerID); !errors.Is(err, ErrNotFound) {
 				t.Fatalf("stale authorization returned row/schema error: %v", err)
 			}
 			current, err := repo.getAccess(ctx, setup.ID)
 			if err != nil || current.OwnerID != tc.ownerAfter || current.Visibility != tc.after {
 				t.Fatal("new access metadata", current, err)
 			}
-			if _, err := repo.getAuthorized(ctx, setup.ID, current); !errors.Is(err, ErrUnsupportedSchema) {
+			if _, err := repo.getAuthorized(ctx, setup.ID, current, tc.ownerAfter); !errors.Is(err, ErrUnsupportedSchema) {
 				t.Fatalf("authorized schema error lost: %v", err)
 			}
 		})

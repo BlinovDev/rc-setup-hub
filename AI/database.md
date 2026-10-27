@@ -21,6 +21,11 @@ PostgreSQL uses UUID identities and TIMESTAMPTZ/UTC. Current storage boundaries:
 
 A NULL chassis means custom/unlisted/unspecified, not a synthetic catalog row.
 Deleting a user cascades setups; physical model deletion sets setup chassis NULL.
+Visible comparison selection also uses the cross-visibility `(created_at DESC,
+id DESC)` keyset index from [00008](../backend/migrations/00008_visible_setup_order.sql),
+existing owner/visibility indexes and the unique unordered friendship-pair index.
+Both comparison sides authorize in one statement snapshot before full projections;
+no persistent comparison table or write transaction is introduced.
 Do not add a general JSONB GIN index without an actual JSON-field search requirement.
 
 ## Schema-v1 evolution and atomicity

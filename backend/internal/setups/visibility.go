@@ -24,3 +24,16 @@ func CanView(callerID, ownerID string, visibility Visibility, acceptedFriend boo
 	}
 	return false
 }
+
+// visibleSetupPredicate is the SQL counterpart of CanView for alias s. The
+// placeholder is a fixed repository parameter, never request-supplied SQL.
+// NULL represents a guest; the indexed unordered friendship pair grants access
+// only while accepted in the same statement snapshot as the protected row.
+func visibleSetupPredicate(placeholder string) string {
+	viewer := "NULLIF(" + placeholder + "::text,'')::uuid"
+	return `(s.visibility='public' OR s.owner_id=` + viewer + ` OR
+ (s.visibility='friends' AND EXISTS (SELECT 1 FROM friendships f
+ WHERE LEAST(f.requester_id,f.addressee_id)=LEAST(` + viewer + `,s.owner_id)
+ AND GREATEST(f.requester_id,f.addressee_id)=GREATEST(` + viewer + `,s.owner_id)
+ AND ` + viewer + ` IS NOT NULL AND f.status='accepted')))`
+}
