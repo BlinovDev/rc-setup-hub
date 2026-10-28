@@ -75,6 +75,7 @@ func TestLinkLengthsPersistenceHTTPAndCompare(t *testing.T) {
 		if err := f.pool.QueryRow(ctx, `SELECT (data #> '{suspension,front,link_lengths,1}') ? 'length_mm' FROM setups WHERE id=$1`, created.ID).Scan(&lengthExists); err != nil || lengthExists {
 			t.Fatal("unknown length fabricated", lengthExists, err)
 		}
+		approveFixture(t, f.pool, patched.ID)
 		records = append(records, patched)
 	}
 	// Reordered arrays and differing custom values remain raw named arrays for Compare.
@@ -86,7 +87,7 @@ func TestLinkLengthsPersistenceHTTPAndCompare(t *testing.T) {
 	replacement.Suspension.Front = &front
 	replacement.Suspension.Rear = &rear
 	replacement.Suspension.Front.LinkLengths = []LinkLength{{Name: "Custom 未知", LengthMM: floatPtr(17.7)}, {Name: "steering_tie_rod", LengthMM: floatPtr(16.3)}, {Name: "lower_arm"}, {Name: "upper_arm", LengthMM: floatPtr(42.123456789)}}
-	right, err := f.service.Create(ctx, f.other.ID, CreateInput{Title: "Other links", Visibility: Public, Data: &replacement})
+	right, err := createReviewedFixture(t, f.service, ctx, f.other.ID, CreateInput{Title: "Other links", Visibility: Public, Data: &replacement})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,6 +109,7 @@ func TestLinkLengthsPersistenceHTTPAndCompare(t *testing.T) {
 		t.Fatal(err)
 	}
 	typed := setupResponse(t, request(router, "POST", "/api/v1/setups", `{"title":"Fixed lengths","visibility":"public","data":`+string(fixedRaw)+`}`, owner), 201)
+	approveFixture(t, f.pool, typed.ID)
 	for _, cookie := range []*http.Cookie{nil, owner, friend} {
 		read := setupResponse(t, request(router, "GET", "/api/v1/setups/"+typed.ID, "", cookie), 200)
 		if !reflect.DeepEqual(read.Data, fixed) {
@@ -204,6 +206,7 @@ func TestLinkLengthsPersistenceHTTPAndCompare(t *testing.T) {
 	}
 	// Existing valid free-text/numeric rows are not rewritten by a title update.
 	legacy := setupResponse(t, request(router, "POST", "/api/v1/setups", `{"title":"Legacy","visibility":"public","data":`+realisticJSON+`}`, owner), 201)
+	approveFixture(t, f.pool, legacy.ID)
 	legacyBefore := legacy.Data
 	legacy = setupResponse(t, request(router, "PATCH", "/api/v1/setups/"+legacy.ID, `{"title":"Legacy title"}`, owner), 200)
 	if !reflect.DeepEqual(legacy.Data, legacyBefore) || legacy.Data.Suspension.Front.LinkLengths[0].Name != "camber_link" {
@@ -224,6 +227,7 @@ func TestLinkLengthsPersistenceHTTPAndCompare(t *testing.T) {
 	}
 	for _, raw := range []string{`{}`, `{"suspension":{"front":{"camber_deg":0},"rear":{"toe_deg":-1.5}}}`, `{"suspension":{"front":{"link_lengths":[{"name":"upper_arm"},{"name":"steering_tie_rod","length_mm":16.2}]},"rear":{"link_lengths":[{"name":"lower_arm","length_mm":50}]}}}`} {
 		optional := setupResponse(t, request(router, "POST", "/api/v1/setups", `{"title":"Optional","visibility":"public","data":`+raw+`}`, owner), 201)
+		approveFixture(t, f.pool, optional.ID)
 		read, err := f.service.Compare(ctx, "", optional.ID, right.ID)
 		if err != nil || !reflect.DeepEqual(read.Left.Data, optional.Data) {
 			t.Fatal("angles/lengths/empty comparison", err)

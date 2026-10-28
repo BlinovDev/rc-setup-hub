@@ -20,6 +20,7 @@ import (
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/web"
 	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/csrf"
 )
 
 func TestModerationHTTPAccessReviewAndRevocation(t *testing.T) {
@@ -168,12 +169,7 @@ func TestModerationHTTPAccessReviewAndRevocation(t *testing.T) {
 		return form{token[1], cookie, expected[1]}
 	}
 	post := func(action string, form form, token, origin string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest("POST", preview+"/"+action, strings.NewReader(url.Values{"expected_updated_at": {form.expected}}.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.Header.Set("X-CSRF-Token", token)
-		req.Header.Set("Origin", origin)
-		req.AddCookie(adminCookie)
-		req.AddCookie(form.cookie)
+		req := moderationDecisionRequest(preview+"/"+action, url.Values{"expected_updated_at": {form.expected}}, token, origin, adminCookie, form.cookie)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 		return w
@@ -245,6 +241,53 @@ func TestModerationHTTPAccessReviewAndRevocation(t *testing.T) {
 		body := fmt.Sprintf(`{"title":"Forged","visibility":"public","data":{},"moderation_status":"approved"}`)
 		if w := request(router, method, path, body, owner); w.Code != 400 {
 			t.Fatal("forged approval", method, w.Code)
+		}
+	}
+}
+
+// Model the same backend host as the browser Origin, as a real admin form does.
+func moderationDecisionRequest(path string, values url.Values, token, origin string, cookies ...*http.Cookie) *http.Request {
+	req := httptest.NewRequest("POST", "http://localhost:8080"+path, strings.NewReader(values.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-CSRF-Token", token)
+	req.Header.Set("Origin", origin)
+	for _, cookie := range cookies {
+		req.AddCookie(cookie)
+	}
+	return req
+}
+
+func TestModerationDecisionRequestCSRF(t *testing.T) {
+	h, err := admin.New(config.Auth{GoogleRedirectURL: "http://localhost:8080/auth/google/callback", SessionSecret: bytes.Repeat([]byte("c"), 32)}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	protected := h.CSRF(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			_, _ = w.Write([]byte(csrf.Token(r)))
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	page := httptest.NewRecorder()
+	protected.ServeHTTP(page, httptest.NewRequest("GET", "http://localhost:8080/admin/moderation", nil))
+	cookies := page.Result().Cookies()
+	if len(cookies) != 1 || page.Body.Len() == 0 {
+		t.Fatal("missing CSRF cookie/token")
+	}
+	for _, tc := range []struct {
+		token, origin string
+		want          int
+	}{
+		{page.Body.String(), "http://localhost:8080", 204},
+		{page.Body.String(), "https://evil.test", 403},
+		{"", "http://localhost:8080", 403},
+	} {
+		request := moderationDecisionRequest("/admin/moderation/setup/approve", url.Values{"expected_updated_at": {"2026-10-28T12:00:00Z"}}, tc.token, tc.origin, cookies...)
+		w := httptest.NewRecorder()
+		protected.ServeHTTP(w, request)
+		if w.Code != tc.want {
+			t.Fatal("CSRF request identity", tc.origin, w.Code, w.Body)
 		}
 	}
 }
