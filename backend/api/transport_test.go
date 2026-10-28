@@ -35,8 +35,14 @@ func TestTransportContract(t *testing.T) {
 	spacing := 5.2
 	profile := users.PublicProfile{ID: id, Nickname: "Driver"}
 	setup := setups.Setup{ID: id, OwnerID: id, Title: "Track setup", Visibility: setups.Private, SchemaVersion: 1, CreatedAt: now, UpdatedAt: now, Data: setups.DataV1{Suspension: &setups.Suspension{Front: &setups.AxleSuspension{ToeDeg: &zero, TopArmSpacing: &setups.ArmSpacing{FrontMM: &zero, RearMM: &spacing}, LowerArmSpacing: &setups.ArmSpacing{RearMM: &zero}}}}}
+	setup.Data.Suspension.Front.UpperArmLengthMM = floatPtrForContract(42.123456789)
+	setup.Data.Suspension.Front.LowerArmLengthMM = floatPtrForContract(38.5)
+	setup.Data.Suspension.Front.SteeringTieRodLengthMM = floatPtrForContract(16.2)
+	linkLength := 42.123456789
+	setup.Data.Suspension.Front.LinkLengths = []setups.LinkLength{{Name: "Measured extra", LengthMM: &linkLength}, {Name: "Custom unknown"}}
+	setup.Data.Suspension.Rear = &setups.AxleSuspension{LinkLengths: []setups.LinkLength{{Name: "upper_arm"}, {Name: "lower_arm", LengthMM: &linkLength}}}
 	setup.Data.Suspension.Front.LowerArmMount = &setups.LowerArmMount{ManufacturerID: &id, Model: "Part #42", ConfigurationNotes: "Front inserts\nMount B"}
-	setup.Data.Suspension.Rear = &setups.AxleSuspension{LowerArmMount: &setups.LowerArmMount{Model: "Rear part"}}
+	setup.Data.Suspension.Rear.LowerArmMount = &setups.LowerArmMount{Model: "Rear part"}
 	setup.LowerArmMountManufacturers = &setups.LowerArmMountManufacturers{Front: &setups.DifferentialManufacturer{ID: id, Name: "Historical manufacturer"}}
 	setup.Data.FrontSteeringKnuckle = &setups.SteeringKnuckle{ManufacturerID: &id, Description: "Part #42\nAluminum"}
 	setup.FrontSteeringKnuckleManufacturer = &setups.DifferentialManufacturer{ID: id, Name: "Historical manufacturer"}
@@ -189,3 +195,5 @@ func TestTransportContract(t *testing.T) {
 		})
 	}
 }
+
+func floatPtrForContract(value float64) *float64 { return &value }

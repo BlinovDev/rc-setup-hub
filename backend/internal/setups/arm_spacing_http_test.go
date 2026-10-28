@@ -104,7 +104,7 @@ func TestArmSpacingHTTPPersistence(t *testing.T) {
 	}
 	patched := setupResponse(t, request(router, "PATCH", path, `{"data":`+string(raw)+`}`, cookie), 200)
 	check(patched.Data)
-	if patched.Data.Suspension.Front.TopArmSpacing != nil || patched.Data.Suspension.Front.LowerArmSpacing.RearMM == nil || *patched.Data.Suspension.Front.LowerArmSpacing.RearMM != 0 || patched.Data.Suspension.Rear.TopArmSpacing == nil || patched.Data.Electronics.Motor != "Existing motor" || *patched.Data.Suspension.Front.CamberDeg != -6.8 || patched.Data.Suspension.Front.LinkLengths[0].LengthMM != 16.2 {
+	if patched.Data.Suspension.Front.TopArmSpacing != nil || patched.Data.Suspension.Front.LowerArmSpacing.RearMM == nil || *patched.Data.Suspension.Front.LowerArmSpacing.RearMM != 0 || patched.Data.Suspension.Rear.TopArmSpacing == nil || patched.Data.Electronics.Motor != "Existing motor" || *patched.Data.Suspension.Front.CamberDeg != -6.8 || (patched.Data.Suspension.Front.LinkLengths[0].LengthMM == nil || *patched.Data.Suspension.Front.LinkLengths[0].LengthMM != 16.2) {
 		t.Fatal("remove/clear lost sibling data", patched)
 	}
 	var present bool

@@ -132,7 +132,7 @@ func normalizeSuspension(data *DataV1) error {
 		return nil
 	}
 	removedEmptyAxle := false
-	for _, axleSlot := range []**AxleSuspension{&data.Suspension.Front, &data.Suspension.Rear} {
+	for axleIndex, axleSlot := range []**AxleSuspension{&data.Suspension.Front, &data.Suspension.Rear} {
 		axle := *axleSlot
 		if axle == nil {
 			continue
@@ -170,7 +170,8 @@ func normalizeSuspension(data *DataV1) error {
 		}
 		// Prune parents introduced solely by empty optional blocks; leave legacy documents alone.
 		if hadOptionalBlock && axle.LowerArmMount == nil && axle.TopArmSpacing == nil && axle.LowerArmSpacing == nil &&
-			axle.CamberDeg == nil && axle.CasterDeg == nil && axle.ToeDeg == nil && len(axle.LinkLengths) == 0 {
+			axle.CamberDeg == nil && axle.CasterDeg == nil && axle.ToeDeg == nil && len(axle.LinkLengths) == 0 &&
+			axle.UpperArmLengthMM == nil && axle.LowerArmLengthMM == nil && axle.SteeringTieRodLengthMM == nil {
 			*axleSlot = nil
 			removedEmptyAxle = true
 			continue
@@ -186,9 +187,12 @@ func normalizeSuspension(data *DataV1) error {
 		for i := range axle.LinkLengths {
 			link := &axle.LinkLengths[i]
 			link.Name = strings.TrimSpace(link.Name)
-			if link.Name == "" || !validText(link.Name, 200) || !finite(link.LengthMM) || link.LengthMM <= 0 {
-				return invalid("link lengths require a name and length_mm greater than zero")
+			if link.Name == "" || !validText(link.Name, 200) || (link.LengthMM != nil && (!finite(*link.LengthMM) || *link.LengthMM <= 0)) {
+				return invalid("link lengths require a name and any supplied length_mm must be greater than zero")
 			}
+		}
+		if err := validateStandardLengths(axle, axleIndex == 0); err != nil {
+			return err
 		}
 	}
 	if removedEmptyAxle && data.Suspension.Front == nil && data.Suspension.Rear == nil {
