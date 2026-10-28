@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 20027)
-Total output lines: 2350
-
 openapi: 3.1.0
 info:
   title: RC Setup Hub frontend API
@@ -874,7 +871,610 @@ paths:
         KiB multipart overhead, 50 megapixels. JPEG/PNG/WebP/HEIC/HEIF content only. First frame
         becomes stripped oriented resized JPEG; first photo is cover. Setup must already exist.
         Maximum ten photos. Owner is checked before decoding. Busy uploads return 503; write failures are retryable 500.
-        Validation error strings distinguish unsupported format, undecodable image,…5027 tokens truncated… empty/null/omitted is omitted.
+        Validation error strings distinguish unsupported format, undecodable image, file size,
+        pixel limit and photo count. Resource termination/timeouts are retryable server errors,
+        not invalid-image responses. Filenames and multipart MIME types never select the decoder.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                request_id:
+                  type: string
+                  format: uuid
+                file:
+                  type: string
+                  format: binary
+              required:
+              - request_id
+              - file
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupPhoto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: Upload capacity busy; retry the same request_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/setups/{id}/photos/{photo_id}/crop:
+    put:
+      operationId: cropSetupPhoto
+      summary: Apply or reset a square thumbnail crop as owner
+      description: >-
+        Integer x/y/size use normalized full-image pixels after server orientation and
+        resize; top-left origin. Bounds are checked against stored full dimensions.
+        crop null resets to size=min(width,height), x=floor((width-size)/2),
+        y=floor((height-size)/2). Full JPEG is never modified. Thumbnail is square
+        min(size,640) pixels without upscaling. expected_revision must match the
+        current thumbnail_revision; stale conflicting writes return 409. An identical
+        immediate retry with expected_revision=current-1 returns the current photo,
+        as does an identical current-revision apply. No automatic mutation retry.
+        Crop/delete/cover are serialized; deleted/not-owned photos return 404.
+        Failures preserve the previous crop/thumbnail. Reload after 409.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      - name: photo_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhotoCropUpdate'
+      responses:
+        '200':
+          description: Current committed photo and thumbnail revision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupPhoto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          description: Processor busy; explicitly retry the same crop and expected_revision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+  /api/v1/setups/{id}/photos/{photo_id}/cover:
+    put:
+      operationId: chooseSetupCover
+      summary: Choose cover as owner; no body
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: photo_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupPhoto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/setups/{id}/photos/{photo_id}:
+    delete:
+      operationId: deleteSetupPhoto
+      summary: Delete as owner; cover falls back to oldest remaining photo
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: photo_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '204':
+          description: Deleted; cleanup queued durably if filesystem removal fails
+  /api/v1/setups/{id}/photos/{photo_id}/image:
+    get:
+      security: []
+      operationId: readSetupPhotoImage
+      summary: Read authorized processed JPEG
+      description: Resolves an optional session and checks current setup visibility on every read; guests see approved public only. No public static
+        media. Cache-Control no-store, private; no ETag/Last-Modified. Lost access and unknown
+        photo are identical 404.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: photo_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '414':
+          $ref: '#/components/responses/PublicURITooLong'
+        '429':
+          $ref: '#/components/responses/PublicReadsBusy'
+        '200':
+          description: JPEG bytes; no-store, private
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/setups/{id}/photos/{photo_id}/thumbnail:
+    get:
+      security: []
+      operationId: readSetupPhotoThumbnail
+      summary: Read authorized processed JPEG
+      description: Resolves an optional session and checks current setup visibility on every read; guests see approved public only. No public static
+        media. Cache-Control no-store, private; no ETag/Last-Modified. Lost access and unknown
+        photo are identical 404.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: photo_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '414':
+          $ref: '#/components/responses/PublicURITooLong'
+        '429':
+          $ref: '#/components/responses/PublicReadsBusy'
+        '200':
+          description: JPEG bytes; no-store, private
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/users/{user_id}/public-setups:
+    get:
+      security: []
+      operationId: listPublicUserSetups
+      summary: List public setups for one safe owner profile
+      tags:
+      - Users
+      - Setups
+      responses:
+        '414':
+          $ref: '#/components/responses/PublicURITooLong'
+        '429':
+          $ref: '#/components/responses/PublicReadsBusy'
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupSearchPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: Public-only for every viewer, including the owner and accepted friends. Returns bounded
+        SetupSearchPage summaries without technical data, email, hidden counts or friendship state. Same
+        validated filters, cursor ordering and 20/default, 50/maximum limit as Explore. Missing user and
+        user without public setups both return an empty page. The existing /users/{user_id}/setups endpoint
+        remains authenticated and visibility-dependent.
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+        description: Trimmed literal case-insensitive substring of title OR owner nickname. Empty/omitted
+          means no text filter; percent/underscore are literal. No null bytes. Never searches email, notes
+          or technical data.
+      - name: brand_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Filter by historical parent brand. Valid nonexistent UUID yields zero results.
+      - name: model_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Filter by exact historical chassis model. Valid nonexistent UUID yields zero results.
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+        description: Maximum page size.
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Opaque next-page cursor from the previous response. Invalid cursor returns 400. Repeat
+          q/brand_id/model_id and desired limit on subsequent requests.
+components:
+  securitySchemes:
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: rc_session
+      description: Backend-issued HttpOnly cookie, never a frontend-managed token.
+        Local HTTP uses SameSite=Lax, Secure=false. Production uses Secure=true; SameSite=None
+        requires Secure for genuinely cross-site deployments. Sessions are in-memory,
+        expire after 24h and are revoked on logout; server restart invalidates them.
+  schemas:
+    APIError:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+      required:
+        - error
+      description: Human-readable error; internal database/authentication details
+        are not returned.
+    Health:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - unavailable
+      required:
+        - status
+    User:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        nickname:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Trimmed, non-empty nickname, case-insensitively unique. No
+            null bytes.
+        avatar_url:
+          type:
+            - string
+            - "null"
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - email
+        - nickname
+        - avatar_url
+        - created_at
+      description: Current authenticated application profile. Email is exposed only
+        to this user.
+    PublicProfile:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        nickname:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Trimmed, non-empty nickname, case-insensitively unique. No
+            null bytes.
+        avatar_url:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - nickname
+        - avatar_url
+      description: 'Safe public profile: no email or provider identity.'
+    ChassisBrand:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+      required:
+        - id
+        - name
+      description: Active catalog selection value; no synthetic Custom record exists.
+    ChassisModel:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+      required:
+        - id
+        - name
+      description: Active catalog selection value; no synthetic Custom record exists.
+    RunningGear:
+      type: object
+      additionalProperties: false
+      properties:
+        front:
+          anyOf:
+            - $ref: '#/components/schemas/AxleRunningGear'
+            - type: "null"
+        rear:
+          anyOf:
+            - $ref: '#/components/schemas/AxleRunningGear'
+            - type: "null"
+      description: Independent optional components per axle. Empty/null blocks and parents
+        are omitted. Additive schema-v1 extension without defaults or migration.
+    AxleRunningGear:
+      type: object
+      additionalProperties: false
+      properties:
+        hex:
+          anyOf:
+            - $ref: '#/components/schemas/Hex'
+            - type: "null"
+        wheel:
+          anyOf:
+            - $ref: '#/components/schemas/Wheel'
+            - type: "null"
+        tire:
+          anyOf:
+            - $ref: '#/components/schemas/Tire'
+            - type: "null"
+    Hex:
+      type: object
+      additionalProperties: false
+      properties:
+        offset_mm:
+          type: [number, "null"]
+          format: double
+          description: Independent finite signed offset in millimetres; zero is preserved.
+            No width field or application-specific magnitude bound.
+    Wheel:
+      type: object
+      additionalProperties: false
+      properties:
+        manufacturer_id:
+          type: [string, "null"]
+          format: uuid
+          description: Existing chassis brand UUID. New selections must exist and be active.
+            Unchanged inactive references on the same axle/component survive PATCH.
+            Null/omitted is unknown; output UUID is canonical.
+        model:
+          type: [string, "null"]
+          maxLength: 200
+          pattern: '^[^\x00]*$'
+          description: Trimmed free text. Empty/null/omitted is omitted.
+        offset_mm:
+          type: [integer, "null"]
+          format: int32
+          minimum: -2147483648
+          maximum: 2147483647
+          description: Independent signed whole-millimetre wheel offset. Zero is preserved.
+            Bounds reflect integer storage, not an assumed RC component range.
+    Tire:
+      type: object
+      additionalProperties: false
+      properties:
+        manufacturer_id:
+          type: [string, "null"]
+          format: uuid
+          description: Existing chassis brand UUID. New selections must exist and be active.
+            Unchanged inactive references on the same axle/component survive PATCH.
+            Null/omitted is unknown; output UUID is canonical.
+        model:
+          type: [string, "null"]
+          maxLength: 200
+          pattern: '^[^\x00]*$'
+          description: Trimmed free text. Empty/null/omitted is omitted.
+    AxleRunningGearManufacturers:
+      type: object
+      additionalProperties: false
+      properties:
+        wheel:
+          anyOf:
+            - $ref: '#/components/schemas/DifferentialManufacturer'
+            - type: "null"
+        tire:
+          anyOf:
+            - $ref: '#/components/schemas/DifferentialManufacturer'
+            - type: "null"
+      required: [wheel, tire]
+    RunningGearManufacturers:
+      type: object
+      additionalProperties: false
+      properties:
+        front:
+          anyOf:
+            - $ref: '#/components/schemas/AxleRunningGearManufacturers'
+            - type: "null"
+        rear:
+          anyOf:
+            - $ref: '#/components/schemas/AxleRunningGearManufacturers'
+            - type: "null"
+      required: [front, rear]
+      description: Read-only joined historical brands including inactive entries.
+        An absent/unresolvable component or entirely unresolved axle is null.
+    SetupDataV1:
+      type: object
+      additionalProperties: false
+      properties:
+        running_gear:
+          anyOf:
+            - $ref: '#/components/schemas/RunningGear'
+            - type: "null"
+        front_steering_knuckle:
+          anyOf:
+            - $ref: '#/components/schemas/SteeringKnuckle'
+            - type: "null"
+        rear_differential:
+          anyOf:
+            - $ref: '#/components/schemas/RearDifferential'
+            - type: "null"
+        suspension:
+          anyOf:
+            - $ref: '#/components/schemas/Suspension'
+            - type: "null"
+        shocks:
+          anyOf:
+            - $ref: '#/components/schemas/Shocks'
+            - type: "null"
+        electronics:
+          anyOf:
+            - $ref: '#/components/schemas/Electronics'
+            - type: "null"
+      description: Schema version 1 technical document. All sections are optional;
+        null sections are omitted on output. Unknown fields are rejected on input.
+        Explicit numeric zero is preserved; omitted/null optional numeric values are
+        unknown. PATCH replaces this entire document, without a deep merge.
+    SteeringKnuckle:
+      type: object
+      additionalProperties: false
+      properties:
+        manufacturer_id:
+          type: [string, "null"]
+          format: uuid
+          description: Existing chassis brand UUID. New selections must exist and be active;
+            unchanged historical inactive references survive PATCH. Null/omitted is unknown.
+            Output UUID is canonical.
+        description:
+          type: [string, "null"]
+          maxLength: 200
+          pattern: '^[^\x00]*$'
+          description: Trimmed free-text part number/product description. Empty/null/omitted
+            is omitted. At most 200 Unicode characters without null bytes.
+      description: Optional front-only steering knuckle. Fields are independent; empty/null
+        blocks are omitted. Additive schema-v1 extension without migration or defaults.
+        No rear knuckle field. Supplied data replaces the entire technical document.
+    RearDifferential:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: [string, "null"]
+          enum: [gear, lsd, ball, spool, null]
+          description: Optional rear differential type; null/omitted means unknown.
+        manufacturer_id:
+          type: [string, "null"]
+          format: uuid
+          description: Reference to the existing chassis brands catalog. New selections
+            must exist and be active. Unchanged historical inactive references are
+            retained on PATCH. Null/omitted means unknown; output UUID is canonical.
+        model:
+          type: [string, "null"]
+          maxLength: 200
+          description: Trimmed free text without null bytes; empty/null/omitted is omitted.
         tuning_notes:
           type: [string, "null"]
           maxLength: 10000
