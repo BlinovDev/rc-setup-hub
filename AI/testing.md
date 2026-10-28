@@ -5,7 +5,30 @@ persistence and authenticated HTTP tests use real disposable migrated PostgreSQL
 through internal/database/dbtest, not SQL mocks or a live database. Google/OIDC is
 faked/local-signed, so normal automated tests do not require a Google account.
 
+## Agent-side verification
+
+These shared tiers select development feedback, **never exemptions from mandatory
+PR CI**. Choose by the highest affected risk and record the tier/reason in the PR.
+Add/update tests for every behavior change; broaden local checks when risk warrants.
+Frontend maps these tiers to its own testing commands.
+
+| Tier | Scope | Agent iteration |
+| --- | --- | --- |
+| Light | Small localized UI/refactor/docs changes | Affected tests and lightweight format/static checks; docs-only changes use the checks below |
+| Standard | Feature changes | Changed-package tests, affected integration/contract tests and appropriate static checks |
+| Critical | Security/auth/visibility/privacy, data loss/migrations/JSONB compatibility, photo/media, infrastructure/deployment | Targeted integration/security checks locally when feasible, plus all relevant mandatory CI; report unavailable prerequisites |
+
+For Go changes, run `gofmt` on changed Go files and, from `backend/`,
+`go test ./internal/<changed-package>` (use `-run <affected-test-pattern>` for a
+focused iteration where appropriate). Include affected callers and contract tests.
+Persistence/authorization changes require relevant integration tests with disposable
+migrated PostgreSQL through dbtest; `go test -short` is never DB integration proof.
+Provision codecs only when running tests/builds that need them. Do not automatically
+repeat the full test/race/build sequence, codec setup or ARM64 checks each edit.
+
 ## Commands
+
+### Documentation and instruction checks
 
 For docs/instruction-only changes, run from repository root:
 
@@ -17,8 +40,14 @@ python3 -m unittest discover -s scripts -p 'test_engineering_skills.py' -v
 git diff --check
 ```
 
-For application changes run Backend CI's sequence from backend/ with Docker and
-native codecs available (full CI still runs for every PR):
+## Mandatory full GitHub Actions checks
+
+Every PR still runs `.github/workflows/ci.yml` with unchanged triggers and job
+identities: `docs-skills`, `test`, `race`, `photo-arm64`. The `test` job also runs
+host/helper safety tests, module integrity, formatting and build. Full test/race
+checks use disposable PostgreSQL and pinned native codecs. The complete sequence
+below belongs to CI (or a justified broader local verification), not every agent
+edit cycle. Run from `backend/` with Docker and native codecs available:
 
 ```sh
 go mod download

@@ -44,5 +44,7 @@ is not independent review. Skills do not authorize broader changes or releases.
 
 Docs: `python3 scripts/verify-docs.py`; instruction/provenance changes also run
 `python3 scripts/verify-engineering-skills.py` and the tests in [testing](AI/testing.md).
-Go checks run from `backend/`; full commands/prerequisites are in that same doc.
+Select the [Light / Standard / Critical agent tier](AI/testing.md#agent-side-verification)
+once per task; targeted checks are separate from mandatory full PR CI.
+Go checks run from `backend/`; commands/prerequisites are in that same doc.
 Use [local setup](backend/README.md) when a running service is actually needed.
