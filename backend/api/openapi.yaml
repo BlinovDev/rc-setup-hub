@@ -1904,6 +1904,14 @@ components:
       type: object
       additionalProperties: false
       properties:
+        moderation_status:
+          type: string
+          readOnly: true
+          enum: [pending, approved, rejected]
+          description: Public access requires approved. Pending/rejected public setups
+            are readable only by their owner and accepted friends. New setups start
+            pending. Photo changes invalidate approval even while non-public; text
+            and technical edits preserve status. Refresh setup after photo mutations.
         running_gear_manufacturers:
           anyOf:
             - $ref: '#/components/schemas/RunningGearManufacturers'
@@ -1983,6 +1991,7 @@ components:
           type: string
           format: date-time
       required:
+        - moderation_status
         - running_gear_manufacturers
         - lower_arm_mount_manufacturers
         - front_steering_knuckle_manufacturer

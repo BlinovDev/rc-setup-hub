@@ -75,7 +75,7 @@ func newSearchFixture(t *testing.T) searchFixture {
 		{"RD2 Carpet", &f.rd.ID, f.owner.ID, Public}, {"SD2 Asphalt 100%", &f.sd.ID, f.owner.ID, Public}, {"MST RMX under_score", &f.rmx.ID, f.other.ID, Public}, {"Custom carpet", nil, f.owner.ID, Public},
 		{"RD2 Carpet", &f.rd.ID, f.owner.ID, Friends}, {"RD2 Carpet", &f.rd.ID, f.owner.ID, Private},
 	} {
-		s, err := f.service.Create(ctx, tc.owner, CreateInput{Title: tc.title, ChassisModelID: tc.model, Visibility: tc.visibility, Notes: stringPtr("notes-marker"), Data: &DataV1{Electronics: &Electronics{Motor: "technical-marker"}}})
+		s, err := createReviewedFixture(t, f.service, ctx, tc.owner, CreateInput{Title: tc.title, ChassisModelID: tc.model, Visibility: tc.visibility, Notes: stringPtr("notes-marker"), Data: &DataV1{Electronics: &Electronics{Motor: "technical-marker"}}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -193,7 +193,7 @@ func TestSearchKeysetPagination(t *testing.T) {
 	ctx := context.Background()
 	expected := append([]Setup(nil), f.public...)
 	for i := 0; i < 31; i++ {
-		s, err := f.service.Create(ctx, f.owner.ID, CreateInput{Title: "Pagination carpet", ChassisModelID: &f.rd.ID, Visibility: Public, Data: &DataV1{}})
+		s, err := createReviewedFixture(t, f.service, ctx, f.owner.ID, CreateInput{Title: "Pagination carpet", ChassisModelID: &f.rd.ID, Visibility: Public, Data: &DataV1{}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -264,7 +264,7 @@ func TestSearchKeysetPagination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inserted, err := f.service.Create(ctx, f.owner.ID, CreateInput{Title: "New insert", Visibility: Public, Data: &DataV1{}})
+	inserted, err := createReviewedFixture(t, f.service, ctx, f.owner.ID, CreateInput{Title: "New insert", Visibility: Public, Data: &DataV1{}})
 	if err != nil {
 		t.Fatal(err)
 	}

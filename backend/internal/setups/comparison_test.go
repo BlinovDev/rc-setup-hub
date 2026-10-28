@@ -30,7 +30,7 @@ func TestVisibleSelectionComparisonMatrix(t *testing.T) {
 	records := append(append([]Setup{}, f.public...), f.friends, f.private)
 	for _, owner := range []string{f.friend.ID, f.other.ID} {
 		for _, visibility := range []Visibility{Friends, Private} {
-			s, err := f.service.Create(ctx, owner, CreateInput{Title: "Additional visible candidate", Visibility: visibility, Data: &DataV1{}})
+			s, err := createReviewedFixture(t, f.service, ctx, owner, CreateInput{Title: "Additional visible candidate", Visibility: visibility, Data: &DataV1{}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -213,7 +213,7 @@ func TestComparisonFullDataHistoricalChassisAndZero(t *testing.T) {
 	if err := decodeStrict(strings.NewReader(raw), &data); err != nil {
 		t.Fatal(err)
 	}
-	left, err := f.service.Create(ctx, f.owner.ID, CreateInput{Title: "Complete", Visibility: Public, ChassisModelID: &f.rd.ID, Data: &data, Notes: stringPtr("Setup notes")})
+	left, err := createReviewedFixture(t, f.service, ctx, f.owner.ID, CreateInput{Title: "Complete", Visibility: Public, ChassisModelID: &f.rd.ID, Data: &data, Notes: stringPtr("Setup notes")})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -78,6 +78,7 @@ func TestCropPersistenceRetriesRacesAndCleanup(t *testing.T) {
 	if err != nil || visible[0].CoverPhoto.ThumbnailRevision != 2 {
 		t.Fatal("profile", err)
 	}
+	approveFixture(t, pool, setup.ID)
 	page, err := s.Search(ctx, SearchInput{})
 	if err != nil || page.Items[0].CoverPhoto.ThumbnailRevision != 2 {
 		t.Fatal("search", err)

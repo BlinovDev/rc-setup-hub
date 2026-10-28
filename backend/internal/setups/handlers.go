@@ -128,7 +128,7 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 		failure(w, err)
 		return
 	}
-	if setup.Visibility == Public {
+	if setup.Visibility == Public && setup.ModerationStatus == Approved {
 		w.Header().Set("X-Robots-Tag", "index, follow")
 	}
 	httpjson.Write(w, 200, setup)

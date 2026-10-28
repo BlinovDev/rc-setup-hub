@@ -27,6 +27,7 @@ func TestCoverPhotoProjectionParity(t *testing.T) {
 	}
 	check := func(t *testing.T) {
 		t.Helper()
+		approveFixture(t, pool, setup.ID)
 		gallery, err := repo.listPhotos(ctx, owner.ID, setup.ID)
 		if err != nil {
 			t.Fatal(err)

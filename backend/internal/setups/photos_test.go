@@ -121,6 +121,7 @@ func TestPhotoPersistenceConcurrencyAndCleanup(t *testing.T) {
 	if err != nil || visible[0].CoverPhoto.ID != first.ID {
 		t.Fatal("profile cover", err)
 	}
+	approveFixture(t, pool, setup.ID)
 	search, err := service.Search(ctx, SearchInput{})
 	if err != nil || search.Items[0].CoverPhoto.ID != first.ID {
 		t.Fatal("search cover", err)
@@ -288,6 +289,7 @@ func TestPhotoHTTPAuthorizationAndRetry(t *testing.T) {
 			t.Fatal("foreign mutation", w.Code)
 		}
 	}
+	approveFixture(t, pool, setup.ID)
 	for _, path := range []string{p.URL, p.ThumbnailURL} {
 		if w := request(router, "GET", path, "", otherCookie); w.Code != 200 {
 			t.Fatal("public", w.Code)
@@ -310,6 +312,7 @@ func TestPhotoHTTPAuthorizationAndRetry(t *testing.T) {
 	if _, err := friendRepo.Accept(ctx, otherID, friendship.ID); err != nil {
 		t.Fatal(err)
 	}
+	approveFixture(t, pool, setup.ID)
 	for _, path := range []string{p.URL, p.ThumbnailURL} {
 		if w := request(router, "GET", path, "", otherCookie); w.Code != 200 {
 			t.Fatal("friend read", w.Code)

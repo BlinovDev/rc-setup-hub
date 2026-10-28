@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Moderation — RC Setup Hub Admin</title>{{template "styles" .}}</head>
+<body>{{template "header" .}}<main>
+<h2>Moderation</h2><p>Pending public setups, oldest update first. Up to 100 awaiting review; completed reviews reveal the next items.</p>
+<table><thead><tr><th>Setup</th><th>Owner</th><th>Submitted / updated (UTC)</th><th>Review</th></tr></thead><tbody>
+{{range .Reviews}}<tr><td>{{.Title}} <span class="badge">Pending</span></td><td>{{.OwnerNickname}}</td><td><time datetime="{{.UpdatedAt.Format "2006-01-02T15:04:05.999999999Z07:00"}}">{{.UpdatedAt.Format "2006-01-02 15:04:05"}}</time></td><td><a href="/admin/moderation/{{.ID}}">Inspect setup and photos</a></td></tr>
+{{else}}<tr><td colspan="4">No setups awaiting review.</td></tr>{{end}}
+</tbody></table></main></body></html>

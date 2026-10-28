@@ -83,7 +83,7 @@ func TestAnonymousPublicHTTP(t *testing.T) {
 	var records []Setup
 	var images []Photo
 	for i, visibility := range []Visibility{Public, Friends, Private} {
-		s, err := service.Create(ctx, owner.user.ID, CreateInput{Title: fmt.Sprintf("Guest setup %d", i), Visibility: visibility, ChassisModelID: &model.ID, Data: realisticData(t)})
+		s, err := createReviewedFixture(t, service, ctx, owner.user.ID, CreateInput{Title: fmt.Sprintf("Guest setup %d", i), Visibility: visibility, ChassisModelID: &model.ID, Data: realisticData(t)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -93,6 +93,7 @@ func TestAnonymousPublicHTTP(t *testing.T) {
 			t.Fatal(err)
 		}
 		images = append(images, p)
+		approveFixture(t, pool, s.ID)
 	}
 	if _, err := catalog.SetBrandActive(ctx, brand.ID, false); err != nil {
 		t.Fatal(err)
@@ -103,7 +104,7 @@ func TestAnonymousPublicHTTP(t *testing.T) {
 	if w := request(router, "GET", "/api/v1/chassis/brands/"+brand.ID+"/models", "", nil); w.Code != 404 {
 		t.Fatal("inactive catalog selector", w.Code)
 	}
-	if _, err := service.Create(ctx, empty.user.ID, CreateInput{Title: "Hidden only", Visibility: Private, Data: &DataV1{}}); err != nil {
+	if _, err := createReviewedFixture(t, service, ctx, empty.user.ID, CreateInput{Title: "Hidden only", Visibility: Private, Data: &DataV1{}}); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
@@ -209,11 +210,11 @@ func TestAnonymousPublicHTTP(t *testing.T) {
 		}
 	}
 	// Public-pagination tests use one-row pages so hidden records cannot affect a cursor.
-	second, err := service.Create(ctx, owner.user.ID, CreateInput{Title: "Second public", Visibility: Public, Data: &DataV1{}})
+	second, err := createReviewedFixture(t, service, ctx, owner.user.ID, CreateInput{Title: "Second public", Visibility: Public, Data: &DataV1{}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreign, err := service.Create(ctx, stranger.user.ID, CreateInput{Title: "Foreign public", Visibility: Public, Data: &DataV1{}})
+	foreign, err := createReviewedFixture(t, service, ctx, stranger.user.ID, CreateInput{Title: "Foreign public", Visibility: Public, Data: &DataV1{}})
 	if err != nil {
 		t.Fatal(err)
 	}

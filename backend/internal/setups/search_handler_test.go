@@ -169,7 +169,7 @@ func TestSearchHTTP(t *testing.T) {
 	// HTTP defaults, cursor parsing and final-page null; every expected item appears once.
 	expected := append([]Setup(nil), f.public...)
 	for i := 0; i < 21; i++ {
-		s, err := f.service.Create(ctx, f.owner.ID, CreateInput{Title: fmt.Sprintf("Paging %02d", i), Visibility: Public, Data: &DataV1{}})
+		s, err := createReviewedFixture(t, f.service, ctx, f.owner.ID, CreateInput{Title: fmt.Sprintf("Paging %02d", i), Visibility: Public, Data: &DataV1{}})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -11,7 +11,7 @@ func (r *Repository) searchVisible(ctx context.Context, viewerID string, params 
 	return r.search(ctx, params, viewerID, true)
 }
 func (r *Repository) search(ctx context.Context, params searchParameters, viewerID string, visible bool) ([]SearchItem, error) {
-	predicate := "s.visibility='public'"
+	predicate := "s.visibility='public' AND s.moderation_status='approved'"
 	args := []any{params.query, params.brandID, params.modelID, nil, nil, params.limit + 1, params.ownerID}
 	if visible {
 		predicate = visibleSetupPredicate("$8")
