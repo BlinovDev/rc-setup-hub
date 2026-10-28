@@ -226,3 +226,35 @@ func TestModerationTransitionsAndAtomicPhotoMutations(t *testing.T) {
 	}
 	status(Pending)
 }
+
+func TestPhotoMutationSerializesWithReview(t *testing.T) {
+	f := newSearchFixture(t)
+	ctx := context.Background()
+	setup, err := f.service.Create(ctx, f.owner.ID, CreateInput{Title: "Concurrent photo review", Visibility: Public, Data: &DataV1{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := f.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	if err := lockPhotoSetup(ctx, tx, f.owner.ID, setup.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO setup_photos(setup_id,storage_key,width,height,thumbnail_width,thumbnail_height,is_cover) VALUES($1,'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',20,10,20,10,true)`, setup.ID); err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan error, 1)
+	go func() { result <- f.service.Review(ctx, setup.ID, f.other.ID, setup.UpdatedAt, Approved) }()
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-result; !errors.Is(err, ErrConflict) {
+		t.Fatal("review approved unseen photo", err)
+	}
+	current, err := f.repo.GetOwned(ctx, f.owner.ID, setup.ID)
+	if err != nil || current.ModerationStatus != Pending || current.CoverPhoto == nil {
+		t.Fatal(current, err)
+	}
+}
