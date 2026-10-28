@@ -123,6 +123,11 @@ func TestModerationHTTPAccessReviewAndRevocation(t *testing.T) {
 		}
 	}
 	assertAccess(false)
+	for _, hidden := range []Setup{f.private, f.friends} {
+		if w := request(router, "GET", "/admin/moderation/"+hidden.ID, "", adminCookie); w.Code != 404 {
+			t.Fatal("unsubmitted setup preview", w.Code)
+		}
+	}
 	for _, path := range []string{"/admin/moderation", preview, adminImage, adminThumb} {
 		for _, v := range []struct {
 			cookie *http.Cookie
@@ -220,6 +225,15 @@ func TestModerationHTTPAccessReviewAndRevocation(t *testing.T) {
 	for _, path := range []string{base, base + "/photos", p.URL, p.ThumbnailURL} {
 		if w := request(router, "GET", path, "", friend); w.Code != 404 {
 			t.Fatal("friendship revocation", path, w.Code)
+		}
+	}
+	// Hiding a setup revokes even admin review media URLs; preview is for public submissions.
+	if _, err := f.service.Patch(ctx, f.owner.ID, setup.ID, PatchInput{Visibility: NullableString{Present: true, Value: stringPtr("private")}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{preview, adminImage, adminThumb} {
+		if w := request(router, "GET", path, "", adminCookie); w.Code != 404 {
+			t.Fatal("hidden admin preview", path, w.Code)
 		}
 	}
 	// The pending/rejected moderation fields cannot be forged through owner writes.

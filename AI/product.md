@@ -37,7 +37,8 @@ Moderation is separate from visibility: new setups at every visibility start
 `pending`; only public pending rows enter the admin review queue. Existing public
 setups are migrated as `approved`. Public pending/rejected setups remain readable
 by owners and accepted friends, including detail, comparison and protected media.
-Admin allowlist sessions have explicit `/admin/moderation` preview/photo routes;
+Admin allowlist sessions have explicit `/admin/moderation` preview/photo routes
+for currently public submissions; friends/private setups are not review previews.
 being an admin never bypasses visibility on normal API URLs. Public discovery,
 search and public profile summaries include only approved public setups.
 

@@ -47,7 +47,7 @@ func (s *Service) ReviewPreview(ctx context.Context, id string) (Setup, []Photo,
 	defer tx.Rollback(context.Background())
 	// Parent share lock keeps the preview and gallery in one coherent revision.
 	var locked string
-	if err = tx.QueryRow(ctx, `SELECT id::text FROM setups WHERE id=$1 FOR SHARE`, id).Scan(&locked); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT id::text FROM setups WHERE id=$1 AND visibility='public' FOR SHARE`, id).Scan(&locked); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			err = ErrNotFound
 		}
@@ -83,7 +83,7 @@ func (s *Service) ReviewPhoto(ctx context.Context, setupID, photoID string, thum
 	if err := validID(photoID); err != nil {
 		return nil, err
 	}
-	p, err := scanPhoto(s.repo.pool.QueryRow(ctx, `SELECT `+photoColumns+` FROM setup_photos WHERE setup_id=$1 AND id=$2`, setupID, photoID))
+	p, err := scanPhoto(s.repo.pool.QueryRow(ctx, `SELECT p.id::text,p.setup_id::text,p.storage_key,p.width,p.height,p.thumbnail_width,p.thumbnail_height,p.is_cover,p.created_at,p.crop,p.thumbnail_revision,COALESCE(p.thumbnail_key,p.storage_key) FROM setup_photos p JOIN setups s ON s.id=p.setup_id WHERE s.id=$1 AND s.visibility='public' AND p.id=$2`, setupID, photoID))
 	if err != nil {
 		return nil, err
 	}
