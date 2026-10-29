@@ -8,7 +8,7 @@ info:
     and an exact ALLOWED_ORIGINS entry. No Google tokens are delivered to the frontend;
     never use localStorage auth. Only explicitly documented GET operations allow guests; all other API operations require a session. Error bodies
     are {"error":"human-readable message"}. Browser mutations require a trusted configured
-    Origin; admin HTML routes are separate and not documented here.'
+    Origin. Public discovery requires public visibility and approved moderation. Pending/rejected public setups remain readable only by owners and accepted friends. Photo mutations invalidate approval even while non-public; text/technical edits preserve it. Admin HTML routes are separate and not documented here.'
 servers:
   - url: http://localhost:8080
     description: Local backend; override this URL for deployed environments.
@@ -481,10 +481,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         "500":
           $ref: '#/components/responses/InternalError'
-      description: Owner sees every visibility. Other authenticated users see public;
-        accepted friends also see friends-only. Private remains owner-only; pending
+      description: Owner sees every visibility. Other authenticated users see approved public;
+        accepted friends also see pending/rejected public and friends-only. Private remains owner-only; pending
         relationships grant no access. Missing/inaccessible returns the same 404,
-        before protected technical data decoding. Guests see public only. Successful public detail is index-eligible; non-public detail and all errors remain noindex.
+        before protected technical data decoding. Guests see approved public only. Only approved public detail is index-eligible; all other detail and errors remain noindex.
       parameters:
         - name: id
           in: path
@@ -606,7 +606,7 @@ paths:
         "500":
           $ref: '#/components/responses/InternalError'
       description: Owner sees all; accepted friend sees public+friends; unrelated/pending
-        sees public only. Private never appears for another user. Newest first (created_at
+        sees approved public only. Private never appears for another user. Newest first (created_at
         DESC, id DESC). No pagination. A valid unknown user UUID returns [].
       parameters:
         - name: user_id
@@ -709,9 +709,9 @@ paths:
         "500":
           $ref: '#/components/responses/InternalError'
       description: >-
-        Comparison candidate selection, not Explore. Guests receive public only;
-        signed-in viewers receive all owned setups plus all public setups and
-        friends-visibility setups from accepted friends. Authorization is filtered
+        Comparison candidate selection, not Explore. Guests receive approved public only;
+        signed-in viewers receive all owned setups plus approved public setups and
+        public/friends-visibility setups from accepted friends. Authorization is filtered
         in SQL before safe summary projections and pagination. No totals, technical
         data, notes, email or provider identity. Does not grant clone or mutation
         permissions. Same literal search, historical chassis filters, ordering,
@@ -776,8 +776,8 @@ paths:
         and custom chassis are allowed. Both current permissions are evaluated in
         one PostgreSQL statement snapshot. If either setup is missing or inaccessible,
         returns the same generic 404 with neither side, before decoding documents.
-        Guests can compare public only; signed-in viewers may also read their own
-        and accepted friends' friends-visibility setups. Read-only and transient,
+        Guests can compare approved public only; signed-in viewers may also read their own
+        and accepted friends' public/friends-visibility setups. Read-only and transient,
         not a persistent comparison, diff calculation, clone or mutation capability.
         Media URLs retain their independent current-visibility checks. No-store;
         comparison responses are not SEO-indexable.
@@ -1040,7 +1040,7 @@ paths:
       security: []
       operationId: readSetupPhotoImage
       summary: Read authorized processed JPEG
-      description: Resolves an optional session and checks current setup visibility on every read; guests see public only. No public static
+      description: Resolves an optional session and checks current setup visibility on every read; guests see approved public only. No public static
         media. Cache-Control no-store, private; no ETag/Last-Modified. Lost access and unknown
         photo are identical 404.
       parameters:
@@ -1079,7 +1079,7 @@ paths:
       security: []
       operationId: readSetupPhotoThumbnail
       summary: Read authorized processed JPEG
-      description: Resolves an optional session and checks current setup visibility on every read; guests see public only. No public static
+      description: Resolves an optional session and checks current setup visibility on every read; guests see approved public only. No public static
         media. Cache-Control no-store, private; no ETag/Last-Modified. Lost access and unknown
         photo are identical 404.
       parameters:
@@ -1904,6 +1904,14 @@ components:
       type: object
       additionalProperties: false
       properties:
+        moderation_status:
+          type: string
+          readOnly: true
+          enum: [pending, approved, rejected]
+          description: Public access requires approved. Pending/rejected public setups
+            are readable only by their owner and accepted friends. New setups start
+            pending. Photo changes invalidate approval even while non-public; text
+            and technical edits preserve status. Refresh setup after photo mutations.
         running_gear_manufacturers:
           anyOf:
             - $ref: '#/components/schemas/RunningGearManufacturers'
@@ -1983,6 +1991,7 @@ components:
           type: string
           format: date-time
       required:
+        - moderation_status
         - running_gear_manufacturers
         - lower_arm_mount_manufacturers
         - front_steering_knuckle_manufacturer

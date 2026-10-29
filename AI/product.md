@@ -28,12 +28,35 @@ Change this file only for an enduring product-rule change, per [workflow](workfl
 
 | Viewer | Public | Friends | Private |
 | --- | --- | --- | --- |
-| Guest | Read | Deny | Deny |
+| Guest | Approved only | Deny | Deny |
 | Owner | Read | Read | Read |
 | Accepted friend | Read | Read | Deny |
-| Other / pending friend | Read | Deny | Deny |
+| Other / pending friend | Approved only | Deny | Deny |
 
-Discovery returns public setups only, even for owners/friends. Owner lists show all;
+Moderation is separate from visibility: new setups at every visibility start
+`pending`; only public pending rows enter the admin review queue. Existing public
+setups are migrated as `approved`. Public pending/rejected setups remain readable
+by owners and accepted friends, including detail, comparison and protected media.
+Admin allowlist sessions have explicit `/admin/moderation` preview/photo routes
+for currently public submissions; friends/private setups are not review previews.
+Being an admin never bypasses visibility on normal API URLs. Public discovery,
+search and public profile summaries include only approved public setups.
+
+Approve/Reject consume the exact preview update timestamp, record reviewer/time,
+and reject stale or concurrent decisions. Photo insert/delete/replacement, cover
+change and crop/frame change atomically reset status to pending, clear reviewer/time
+and advance the setup update timestamp. This also applies while friends/private,
+so hiding, editing photos and republishing cannot reuse approval. Failed mutations,
+identical upload retries, same-cover requests and unchanged crop retries preserve
+approval. Text, chassis, notes and technical-data edits preserve moderation state
+but invalidate stale review forms. Approval survives visibility-only toggles when
+photos are unchanged. A rejected setup stays rejected on text edits; photo changes
+resubmit it as pending. Moving a rejected setup away from public and back also
+resubmits as pending, never approved. No rejection messages or reporting workflow.
+The first 100 pending public rows are reviewed oldest-update first; deciding them
+reveals subsequent rows.
+
+Discovery returns approved public setups only, even for owners/friends. Owner lists show all;
 profile lists return only backend-authorized items. Inaccessible and missing detail
 are indistinguishable. Reads do not grant modification rights. Explore is public;
 safe owner profiles show nickname/avatar and public setups without hidden counts.

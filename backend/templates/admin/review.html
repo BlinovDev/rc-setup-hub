@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Review setup — RC Setup Hub Admin</title>{{template "styles" .}}</head>
+<body>{{template "header" .}}<main>
+<p><a href="/admin/moderation">Back to moderation queue</a></p>
+{{with .Setup}}<h2>{{.Title}}</h2><p><span class="badge">{{.ModerationStatus}}</span> · Visibility: {{.Visibility}}</p>
+<p>Owner: {{.OwnerID}} · <a href="/api/v1/users/{{.OwnerID}}">Owner profile</a></p>
+<p>Updated (UTC): {{.UpdatedAt.Format "2006-01-02T15:04:05.999999999Z07:00"}}</p>
+{{if .Chassis}}<p>Chassis: {{.Chassis.BrandName}} {{.Chassis.ModelName}}</p>{{else}}<p>Custom / unlisted chassis</p>{{end}}
+<h3>Notes</h3><p class="notes">{{if .Notes}}{{.Notes}}{{else}}No notes.{{end}}</p>
+{{end}}
+<h3>Technical data</h3><pre>{{.TechnicalData}}</pre>
+<h3>Photos</h3><div class="gallery">{{range .Photos}}
+<figure><a href="/admin/moderation/{{.SetupID}}/photos/{{.ID}}/image"><img src="/admin/moderation/{{.SetupID}}/photos/{{.ID}}/thumbnail" alt="Setup photo{{if .IsCover}} (cover){{end}}" loading="lazy"></a><figcaption>{{if .IsCover}}Cover · {{end}}<a href="/admin/moderation/{{.SetupID}}/photos/{{.ID}}/image">Inspect full photo</a></figcaption></figure>
+{{else}}<p>No photos.</p>{{end}}</div>
+{{if and (eq .Setup.Visibility "public") (eq .Setup.ModerationStatus "pending")}}
+<div class="actions" aria-label="Moderation decision">
+<form method="post" action="/admin/moderation/{{.Setup.ID}}/approve">{{.CSRFField}}<input type="hidden" name="expected_updated_at" value="{{.Setup.UpdatedAt.Format "2006-01-02T15:04:05.999999999Z07:00"}}"><button type="submit">Approve public access</button></form>
+<form method="post" action="/admin/moderation/{{.Setup.ID}}/reject">{{.CSRFField}}<input type="hidden" name="expected_updated_at" value="{{.Setup.UpdatedAt.Format "2006-01-02T15:04:05.999999999Z07:00"}}"><button class="danger" type="submit">Reject public access</button></form>
+</div><p>If the setup changes, reload and inspect it before deciding again.</p>{{end}}
+</main></body></html>

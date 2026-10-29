@@ -193,6 +193,12 @@ func TestFriendshipHTTPAndVisibility(t *testing.T) {
 	for _, visibility := range []string{"public", "friends", "private"} {
 		var s setups.Setup
 		decode(req("POST", "/api/v1/setups", `{"title":"`+visibility+`","visibility":"`+visibility+`","data":{}}`, a.cookie), 201, &s)
+		// This regression exercises friendship transitions against an already-reviewed public setup.
+		if visibility == "public" {
+			if _, err := pool.Exec(context.Background(), `UPDATE setups SET moderation_status='approved' WHERE id=$1`, s.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
 		examples = append(examples, s)
 	}
 	setupPath := func(s setups.Setup) string { return "/api/v1/setups/" + s.ID }

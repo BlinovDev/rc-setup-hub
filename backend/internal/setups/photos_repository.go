@@ -170,7 +170,7 @@ func photoCaller(id string) any {
 	return id
 }
 
-const photoVisibility = `(s.owner_id=$2 OR s.visibility='public' OR (s.visibility='friends' AND EXISTS(SELECT 1 FROM friendships f WHERE f.status='accepted' AND ((f.requester_id=s.owner_id AND f.addressee_id=$2) OR (f.addressee_id=s.owner_id AND f.requester_id=$2)))))`
+var photoVisibility = visibleSetupPredicate("$2")
 
 func (r *Repository) photoAccess(ctx context.Context, callerID, setupID string) error {
 	var id string
@@ -195,6 +195,9 @@ func (r *Repository) mutatePhoto(ctx context.Context, ownerID, setupID, photoID 
 	p, err := scanPhoto(tx.QueryRow(ctx, `SELECT `+photoColumns+` FROM setup_photos WHERE setup_id=$1 AND id=$2`, setupID, photoID))
 	if err != nil {
 		return Photo{}, err
+	}
+	if !remove && p.IsCover {
+		return p, nil
 	}
 	if remove {
 		if _, err = tx.Exec(ctx, `DELETE FROM setup_photos WHERE id=$1`, photoID); err != nil {

@@ -10,6 +10,14 @@ import (
 
 const SchemaVersion = 1
 
+type ModerationStatus string
+
+const (
+	Pending  ModerationStatus = "pending"
+	Approved ModerationStatus = "approved"
+	Rejected ModerationStatus = "rejected"
+)
+
 type Visibility string
 
 const (
@@ -232,6 +240,7 @@ type LowerArmMountManufacturers struct {
 }
 
 type Setup struct {
+	ModerationStatus                 ModerationStatus            `json:"moderation_status"`
 	RunningGearManufacturers         *RunningGearManufacturers   `json:"running_gear_manufacturers"`
 	FrontSteeringKnuckleManufacturer *DifferentialManufacturer   `json:"front_steering_knuckle_manufacturer"`
 	LowerArmMountManufacturers       *LowerArmMountManufacturers `json:"lower_arm_mount_manufacturers"`

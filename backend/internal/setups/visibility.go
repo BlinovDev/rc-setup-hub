@@ -31,9 +31,17 @@ func CanView(callerID, ownerID string, visibility Visibility, acceptedFriend boo
 // only while accepted in the same statement snapshot as the protected row.
 func visibleSetupPredicate(placeholder string) string {
 	viewer := "NULLIF(" + placeholder + "::text,'')::uuid"
-	return `(s.visibility='public' OR s.owner_id=` + viewer + ` OR
- (s.visibility='friends' AND EXISTS (SELECT 1 FROM friendships f
+	return `((s.visibility='public' AND s.moderation_status='approved') OR s.owner_id=` + viewer + ` OR
+ (s.visibility IN ('public','friends') AND EXISTS (SELECT 1 FROM friendships f
  WHERE LEAST(f.requester_id,f.addressee_id)=LEAST(` + viewer + `,s.owner_id)
  AND GREATEST(f.requester_id,f.addressee_id)=GREATEST(` + viewer + `,s.owner_id)
  AND ` + viewer + ` IS NOT NULL AND f.status='accepted')))`
+}
+
+// CanViewModerated separates the requested audience from effective public access.
+func CanViewModerated(callerID, ownerID string, visibility Visibility, status ModerationStatus, acceptedFriend bool) bool {
+	if visibility == Public && status != Approved {
+		return callerID != "" && (callerID == ownerID || acceptedFriend)
+	}
+	return CanView(callerID, ownerID, visibility, acceptedFriend)
 }

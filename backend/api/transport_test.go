@@ -34,7 +34,7 @@ func TestTransportContract(t *testing.T) {
 	zero := 0.0
 	spacing := 5.2
 	profile := users.PublicProfile{ID: id, Nickname: "Driver"}
-	setup := setups.Setup{ID: id, OwnerID: id, Title: "Track setup", Visibility: setups.Private, SchemaVersion: 1, CreatedAt: now, UpdatedAt: now, Data: setups.DataV1{Suspension: &setups.Suspension{Front: &setups.AxleSuspension{ToeDeg: &zero, TopArmSpacing: &setups.ArmSpacing{FrontMM: &zero, RearMM: &spacing}, LowerArmSpacing: &setups.ArmSpacing{RearMM: &zero}}}}}
+	setup := setups.Setup{ModerationStatus: setups.Pending, ID: id, OwnerID: id, Title: "Track setup", Visibility: setups.Private, SchemaVersion: 1, CreatedAt: now, UpdatedAt: now, Data: setups.DataV1{Suspension: &setups.Suspension{Front: &setups.AxleSuspension{ToeDeg: &zero, TopArmSpacing: &setups.ArmSpacing{FrontMM: &zero, RearMM: &spacing}, LowerArmSpacing: &setups.ArmSpacing{RearMM: &zero}}}}}
 	setup.Data.Suspension.Front.UpperArmLengthMM = floatPtrForContract(42.123456789)
 	setup.Data.Suspension.Front.LowerArmLengthMM = floatPtrForContract(38.5)
 	setup.Data.Suspension.Front.SteeringTieRodLengthMM = floatPtrForContract(16.2)

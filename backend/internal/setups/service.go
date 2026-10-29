@@ -88,13 +88,13 @@ func (s *Service) Get(ctx context.Context, callerID, id string) (Setup, error) {
 		return Setup{}, err
 	}
 	accepted := false
-	if !CanView(callerID, access.OwnerID, access.Visibility, false) && CanView(callerID, access.OwnerID, access.Visibility, true) {
+	if !CanViewModerated(callerID, access.OwnerID, access.Visibility, access.ModerationStatus, false) && CanViewModerated(callerID, access.OwnerID, access.Visibility, access.ModerationStatus, true) {
 		accepted, err = s.friends.AreAccepted(ctx, callerID, access.OwnerID)
 		if err != nil {
 			return Setup{}, err
 		}
 	}
-	if !CanView(callerID, access.OwnerID, access.Visibility, accepted) {
+	if !CanViewModerated(callerID, access.OwnerID, access.Visibility, access.ModerationStatus, accepted) {
 		return Setup{}, ErrNotFound
 	}
 	return s.repo.getAuthorized(ctx, id, access, callerID)
@@ -106,15 +106,7 @@ func (s *Service) ListUser(ctx context.Context, callerID, ownerID string) ([]Set
 		return nil, invalid("invalid user ID")
 	}
 	ownerID = uuid.String()
-	accepted := false
-	if callerID != "" && callerID != ownerID {
-		var err error
-		accepted, err = s.friends.AreAccepted(ctx, callerID, ownerID)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return s.repo.ListVisible(ctx, ownerID, VisibleVisibilities(callerID, ownerID, accepted))
+	return s.repo.ListForViewer(ctx, ownerID, callerID)
 }
 func (s *Service) List(ctx context.Context, ownerID string) ([]Setup, error) {
 	return s.repo.ListOwned(ctx, ownerID)

@@ -1,10 +1,12 @@
 {{define "header"}}
+
 <header>
   <h1>RC Setup Hub — Admin</h1>
   <p>Signed in as {{.User.Nickname}} ({{.User.Email}})</p>
   <nav aria-label="Admin navigation">
     <ul>
       <li><a href="/admin">Dashboard</a></li>
+      <li><a href="/admin/moderation">Moderation</a></li>
       <li><a href="/admin/users">Users</a></li>
       <li>Chassis catalog: <a href="/admin/chassis/brands">Brands</a> · <a href="/admin/chassis/models">Models</a></li>
     </ul>

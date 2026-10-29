@@ -104,7 +104,12 @@ func main() {
 		logger.Error("admin initialization failed")
 		os.Exit(1)
 	}
-	adminHandler.Register(router, authHandler.RequireUser, catalogHandler.RegisterAdmin)
+	moderationHandler, err := setups.NewModerationHandler(setupService)
+	if err != nil {
+		logger.Error("moderation initialization failed")
+		os.Exit(1)
+	}
+	adminHandler.Register(router, authHandler.RequireUser, catalogHandler.RegisterAdmin, moderationHandler.RegisterAdmin)
 	server := &http.Server{
 		Addr: cfg.HTTPAddr, Handler: router,
 		ReadHeaderTimeout: 5 * time.Second,

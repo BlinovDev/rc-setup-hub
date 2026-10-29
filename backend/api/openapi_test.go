@@ -107,7 +107,7 @@ func TestOpenAPIContract(t *testing.T) {
 		t.Fatal("detail schema version is not fixed to 1")
 	}
 	for _, name := range []string{"CreateSetup", "PatchSetup"} {
-		for _, forbidden := range []string{"owner_id", "schema_version"} {
+		for _, forbidden := range []string{"owner_id", "schema_version", "moderation_status", "reviewed_by", "reviewed_at"} {
 			if _, ok := props(name)[forbidden]; ok {
 				t.Fatalf("%s accepts %s", name, forbidden)
 			}
@@ -115,6 +115,10 @@ func TestOpenAPIContract(t *testing.T) {
 		if schemas[name]["additionalProperties"] != false {
 			t.Fatalf("%s permits unknown fields", name)
 		}
+	}
+	status := props("Setup")["moderation_status"].(map[string]any)
+	if fmt.Sprint(status["enum"]) != "[pending approved rejected]" || status["readOnly"] != true {
+		t.Fatal("moderation status contract", status)
 	}
 	if props("Setup")["owner_id"] == nil || props("Setup")["chassis"] == nil {
 		t.Fatal("Setup lacks direct-link owner/chassis metadata")
