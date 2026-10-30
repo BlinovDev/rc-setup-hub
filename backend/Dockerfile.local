@@ -1,0 +1,15 @@
+FROM golang:1.27 AS build
+WORKDIR /src/backend
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ ./
+RUN CGO_ENABLED=0 go build -o /out/server ./cmd/server && CGO_ENABLED=0 go build -o /out/migrate ./cmd/migrate
+
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY scripts/provision-photo-decoder.sh /tmp/provision-photo-decoder.sh
+RUN bash /tmp/provision-photo-decoder.sh && rm -rf /var/lib/apt/lists/* /tmp/provision-photo-decoder.sh
+WORKDIR /app
+COPY --from=build /out/server /out/migrate ./
+COPY backend/templates ./templates
+CMD ["/app/server"]

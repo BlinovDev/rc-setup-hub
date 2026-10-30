@@ -3,6 +3,7 @@ package setups
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -11,9 +12,12 @@ import (
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
 )
 
+var ErrSearchAuthentication = errors.New("authentication required for this setup filter")
+
 // SearchInput contains raw query values; nil distinguishes absent optional parameters.
 type SearchInput struct {
 	Q                               string
+	Scope                           *string
 	BrandID, ModelID, Limit, Cursor *string
 }
 
@@ -46,6 +50,7 @@ type searchCursor struct {
 }
 type searchParameters struct {
 	query            string
+	scope            string
 	ownerID          *string
 	brandID, modelID *string
 	limit            int
@@ -78,7 +83,13 @@ func decodeSearchCursor(value string) (*searchCursor, error) {
 	return &searchCursor{CreatedAt: createdAt.UTC(), ID: *id}, nil
 }
 func normalizeSearch(input SearchInput) (searchParameters, error) {
-	params := searchParameters{query: strings.TrimSpace(input.Q), limit: 20}
+	params := searchParameters{query: strings.TrimSpace(input.Q), limit: 20, scope: "all"}
+	if input.Scope != nil {
+		params.scope = *input.Scope
+		if params.scope != "all" && params.scope != "mine" && params.scope != "friends" {
+			return params, invalid("scope must be all, mine or friends")
+		}
+	}
 	if !utf8.ValidString(params.query) || strings.ContainsRune(params.query, 0) || utf8.RuneCountInString(params.query) > 100 {
 		return params, invalid("q must contain at most 100 characters without null bytes")
 	}
@@ -112,6 +123,9 @@ func (s *Service) Search(ctx context.Context, input SearchInput) (SearchPage, er
 	if err != nil {
 		return SearchPage{}, err
 	}
+	if params.scope != "all" {
+		return SearchPage{}, invalid("scope is only supported by visible setup search")
+	}
 	items, err := s.repo.searchPublic(ctx, params)
 	if err != nil {
 		return SearchPage{}, err
@@ -120,11 +134,14 @@ func (s *Service) Search(ctx context.Context, input SearchInput) (SearchPage, er
 }
 
 // SearchVisible selects candidates from every setup readable by this viewer.
-// It never changes Explore's deliberately public-only search behavior.
+// Scope narrows the authorized set; public search remains public-only.
 func (s *Service) SearchVisible(ctx context.Context, viewerID string, input SearchInput) (SearchPage, error) {
 	params, err := normalizeSearch(input)
 	if err != nil {
 		return SearchPage{}, err
+	}
+	if params.scope != "all" && viewerID == "" {
+		return SearchPage{}, ErrSearchAuthentication
 	}
 	items, err := s.repo.searchVisible(ctx, viewerID, params)
 	if err != nil {
@@ -154,6 +171,9 @@ func (s *Service) PublicUserSetups(ctx context.Context, ownerID string, input Se
 	params.ownerID, err = canonicalUUID(&ownerID, "user_id")
 	if err != nil {
 		return SearchPage{}, err
+	}
+	if params.scope != "all" {
+		return SearchPage{}, invalid("scope is only supported by visible setup search")
 	}
 	items, err := s.repo.searchPublic(ctx, params)
 	if err != nil {

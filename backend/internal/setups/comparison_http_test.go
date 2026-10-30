@@ -110,6 +110,16 @@ func TestComparisonAndVisibleHTTP(t *testing.T) {
 			t.Fatal("invalid selection", query, w.Code, w.Body)
 		}
 	}
+	for _, scope := range []string{"mine", "friends"} {
+		if w := request(router, "GET", "/api/v1/setups/visible?scope="+scope, "", nil); w.Code != 401 {
+			t.Fatal("guest personal scope", w.Code, w.Body)
+		}
+	}
+	for _, query := range []string{"scope=", "scope=unknown", "scope=mine&scope=friends"} {
+		if w := request(router, "GET", "/api/v1/setups/visible?"+query, "", owner); w.Code != 400 {
+			t.Fatal("invalid scope", w.Code, w.Body)
+		}
+	}
 	for _, method := range []string{"PATCH", "DELETE"} {
 		if w := request(router, method, "/api/v1/setups/"+f.public[0].ID, `{"title":"forbidden"}`, friend); w.Code != 404 {
 			t.Fatal("foreign mutation", method, w.Code, w.Body)

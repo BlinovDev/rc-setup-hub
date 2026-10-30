@@ -704,12 +704,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SetupSearchPage'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
         "400":
           $ref: '#/components/responses/BadRequest'
         "500":
           $ref: '#/components/responses/InternalError'
       description: >-
-        Comparison candidate selection, not Explore. Guests receive approved public only;
+        Visible setup selection for comparison and explicit personal browse presets. Guests receive approved public only;
         signed-in viewers receive all owned setups plus approved public setups and
         public/friends-visibility setups from accepted friends. Authorization is filtered
         in SQL before safe summary projections and pagination. No totals, technical
@@ -718,6 +720,20 @@ paths:
         default 20/max 50 and keyset pagination as public search. Repeat filters
         when following next_cursor; access is rechecked on every request.
       parameters:
+        - name: scope
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [all, mine, friends]
+            default: all
+          description: >-
+            Narrows authorized results before pagination. All retains the default
+            visible set. Mine includes only the session user's setups at any visibility.
+            Friends includes only accepted friends' currently readable setups, excluding
+            the viewer's own and friends' private setups. Mine/friends require a session
+            (401 for guests). Invalid, empty or duplicate scope is 400. Repeat scope
+            on subsequent cursor requests. Public search remains public-only.
         - name: q
           in: query
           required: false
