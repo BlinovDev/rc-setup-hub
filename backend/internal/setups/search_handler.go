@@ -23,7 +23,7 @@ func (h *Handler) searchPage(w http.ResponseWriter, r *http.Request, ownerID str
 		failure(w, invalid("invalid search query parameters"))
 		return
 	}
-	for _, field := range []string{"q", "brand_id", "model_id", "limit", "cursor"} {
+	for _, field := range []string{"q", "brand_id", "model_id", "limit", "cursor", "scope"} {
 		if len(values[field]) > 1 {
 			failure(w, invalid("duplicate "+field+" parameter"))
 			return
@@ -36,7 +36,7 @@ func (h *Handler) searchPage(w http.ResponseWriter, r *http.Request, ownerID str
 		value := values.Get(field)
 		return &value
 	}
-	input := SearchInput{Q: values.Get("q"), BrandID: optional("brand_id"), ModelID: optional("model_id"), Limit: optional("limit"), Cursor: optional("cursor")}
+	input := SearchInput{Q: values.Get("q"), Scope: optional("scope"), BrandID: optional("brand_id"), ModelID: optional("model_id"), Limit: optional("limit"), Cursor: optional("cursor")}
 	var page SearchPage
 	if visible {
 		page, err = h.service.SearchVisible(r.Context(), viewer(r), input)

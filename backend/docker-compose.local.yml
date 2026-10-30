@@ -1,0 +1,26 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile.local
+    env_file:
+      - .env
+    environment:
+      HTTP_ADDR: ':8080'
+      DATABASE_URL: postgres://rc_setup_dev:rc_setup_dev@postgres:5432/rc_setup_hub?sslmode=disable
+      MEDIA_DIR: /var/lib/rc-setup-hub/media
+      APP_URL: http://localhost:5173
+      ALLOWED_ORIGINS: http://localhost:5173
+      GOOGLE_REDIRECT_URL: http://localhost:8080/auth/google/callback
+      SESSION_COOKIE_SECURE: 'false'
+      SESSION_SAME_SITE: lax
+    ports:
+      - '127.0.0.1:8080:8080'
+    volumes:
+      - local_media:/var/lib/rc-setup-hub/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ['/bin/sh', '-ec', '/app/migrate up; exec /app/server']
+volumes:
+  local_media:

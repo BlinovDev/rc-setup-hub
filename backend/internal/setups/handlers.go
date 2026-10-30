@@ -68,6 +68,8 @@ func failure(w http.ResponseWriter, err error) {
 	var validation *ValidationError
 	status, message := 500, "setup operation failed"
 	switch {
+	case errors.Is(err, ErrSearchAuthentication):
+		status, message = 401, ErrSearchAuthentication.Error()
 	case errors.As(err, &validation):
 		status, message = 400, validation.Error()
 	case errors.Is(err, ErrInvalidChassis):

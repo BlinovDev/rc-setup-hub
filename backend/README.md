@@ -43,6 +43,27 @@ Vite runs separately at port 5173; exact CORS and SameSite are independent of AP
 Production HTTPS and genuinely cross-site cookie requirements are in
 [security](../AI/architecture.md#authentication-and-security).
 
+## Local Docker runtime on macOS
+
+Docker supplies Ubuntu 24.04 and the supported native photo decoder. Put the local
+Google credentials and SESSION_SECRET in ignored `backend/.env` first (see above).
+From `backend/`, start PostgreSQL and the API in the background:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.local.yml logs -f api
+```
+
+The API listens at http://localhost:8080 and accepts the separate Vite frontend at
+http://localhost:5173. Startup applies outstanding migrations before serving.
+Compose overrides the database host and media path for the container; photos persist
+in the separate `local_media` volume. This configuration is for local development.
+After backend edits, repeat the start command to rebuild. Stop without deleting data:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.local.yml down
+```
+
 ## Smoke and migrations
 
 ```sh

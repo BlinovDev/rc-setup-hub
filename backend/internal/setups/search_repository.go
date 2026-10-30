@@ -16,6 +16,15 @@ func (r *Repository) search(ctx context.Context, params searchParameters, viewer
 	if visible {
 		predicate = visibleSetupPredicate("$8")
 		args = append(args, viewerID)
+		switch params.scope {
+		case "mine":
+			predicate += " AND s.owner_id=NULLIF($8::text,'')::uuid"
+		case "friends":
+			predicate += ` AND s.owner_id<>NULLIF($8::text,'')::uuid AND EXISTS (
+    SELECT 1 FROM friendships sf WHERE sf.status='accepted'
+    AND LEAST(sf.requester_id,sf.addressee_id)=LEAST(NULLIF($8::text,'')::uuid,s.owner_id)
+    AND GREATEST(sf.requester_id,sf.addressee_id)=GREATEST(NULLIF($8::text,'')::uuid,s.owner_id))`
+		}
 	}
 	var cursorTime, cursorID any
 	if params.cursor != nil {
