@@ -137,12 +137,20 @@ func TestComparisonAndVisibleHTTP(t *testing.T) {
 	if w.Code != 403 {
 		t.Fatal("origin bypass", w.Code)
 	}
-	// Current main has no clone endpoint; neither read endpoint adds one.
-	for _, id := range []string{f.public[0].ID, f.friends.ID, f.private.ID} {
-		w := request(router, "POST", "/api/v1/setups/"+id+"/clone", "", friend)
-		if w.Code != 404 && w.Code != 405 {
-			t.Fatal("comparison introduced cloning", w.Code, w.Body)
+	// Comparison remains read-only; explicit cloning is a separate authenticated mutation.
+	var receipts int
+	if err := f.pool.QueryRow(ctx, `SELECT count(*) FROM setup_clone_requests`).Scan(&receipts); err != nil || receipts != 0 {
+		t.Fatal("comparison created clone receipts", receipts, err)
+	}
+	body := `{"request_id":"00000000-0000-4000-8000-000000000001"}`
+	for _, id := range []string{f.friends.ID, f.private.ID} {
+		w := request(router, "POST", "/api/v1/setups/"+id+"/clone", body, friend)
+		if w.Code != 404 {
+			t.Fatal("comparison granted non-public cloning", w.Code, w.Body)
 		}
+	}
+	if w := request(router, "POST", "/api/v1/setups/"+f.public[0].ID+"/clone", body, nil); w.Code != 401 {
+		t.Fatal("comparison granted anonymous cloning", w.Code, w.Body)
 	}
 	for _, method := range []string{"POST", "PATCH", "DELETE", "HEAD"} {
 		for _, p := range []string{"/api/v1/setups/visible", path(f.public[0].ID, f.public[1].ID)} {

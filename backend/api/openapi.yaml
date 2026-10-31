@@ -457,6 +457,53 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateSetup'
+  /api/v1/setups/{id}/clone:
+    post:
+      operationId: cloneSetup
+      summary: Clone an approved public setup as an independent private copy
+      tags: [Setups]
+      description: Authenticated only, including for an owned source. Rechecks public
+        visibility and approved moderation under a source row lock through commit.
+        Copies chassis, schema-v1 technical JSONB and notes, preserving historical
+        references, nulls, precision and zeros. No photos or cover. Title is truncated
+        to 143 Unicode characters before appending " (Copy)". New copy is private/pending.
+        Caller-scoped request_id deduplicates retries; reuse for another source or
+        a deleted clone returns 409. Even retries recheck source eligibility.
+        Missing and ineligible sources return the same 404 with no source metadata.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloneSetup'
+      responses:
+        "201":
+          description: Private clone, including an idempotent replay
+          headers:
+            Location:
+              description: Relative URL of the private clone.
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Setup'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "500":
+          $ref: '#/components/responses/InternalError'
   /api/v1/setups/{id}:
     get:
       security: []
@@ -1920,6 +1967,13 @@ components:
       type: object
       additionalProperties: false
       properties:
+        source_setup_id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Optional lineage UUID, exposed only while the source remains
+            approved public. Omitted for no lineage, deleted or non-public/unapproved
+            sources, even to owners/friends. No source title, owner or media is exposed.
         moderation_status:
           type: string
           readOnly: true
@@ -2025,6 +2079,15 @@ components:
         - created_at
         - updated_at
       description: Complete setup with application owner UUID and read-only historical chassis display. No owner email or provider identity is exposed.
+    CloneSetup:
+      type: object
+      additionalProperties: false
+      required: [request_id]
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Fresh UUID per deliberate clone; retain for retries of that action.
     CreateSetup:
       type: object
       additionalProperties: false

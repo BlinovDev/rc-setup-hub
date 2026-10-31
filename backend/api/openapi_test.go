@@ -54,7 +54,7 @@ func TestOpenAPIContract(t *testing.T) {
 		"/api/v1/users/{user_id}/public-setups": {"get"}, "/api/v1/users/{user_id}": {"get"}, "/api/v1/auth/logout": {"post"}, "/api/v1/me": {"get", "patch"}, "/api/v1/users/search": {"get"},
 		"/api/v1/friendships": {"get", "post"}, "/api/v1/friendships/{id}/accept": {"post"}, "/api/v1/friendships/{id}": {"delete"},
 		"/api/v1/chassis/brands": {"get"}, "/api/v1/chassis/brands/{brand_id}/models": {"get"},
-		"/api/v1/setups": {"post"}, "/api/v1/setups/{id}": {"get", "patch", "delete"},
+		"/api/v1/setups/{id}/clone": {"post"}, "/api/v1/setups": {"post"}, "/api/v1/setups/{id}": {"get", "patch", "delete"},
 		"/api/v1/setups/{id}/photos":                      {"get", "post"},
 		"/api/v1/setups/{id}/photos/{photo_id}":           {"delete"},
 		"/api/v1/setups/{id}/photos/{photo_id}/crop":      {"put"},
@@ -107,7 +107,7 @@ func TestOpenAPIContract(t *testing.T) {
 		t.Fatal("detail schema version is not fixed to 1")
 	}
 	for _, name := range []string{"CreateSetup", "PatchSetup"} {
-		for _, forbidden := range []string{"owner_id", "schema_version", "moderation_status", "reviewed_by", "reviewed_at"} {
+		for _, forbidden := range []string{"owner_id", "schema_version", "moderation_status", "reviewed_by", "reviewed_at", "source_setup_id"} {
 			if _, ok := props(name)[forbidden]; ok {
 				t.Fatalf("%s accepts %s", name, forbidden)
 			}
