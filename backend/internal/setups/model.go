@@ -240,6 +240,7 @@ type LowerArmMountManufacturers struct {
 }
 
 type Setup struct {
+	SourceSetupID                    *string                     `json:"source_setup_id,omitempty"`
 	ModerationStatus                 ModerationStatus            `json:"moderation_status"`
 	RunningGearManufacturers         *RunningGearManufacturers   `json:"running_gear_manufacturers"`
 	FrontSteeringKnuckleManufacturer *DifferentialManufacturer   `json:"front_steering_knuckle_manufacturer"`

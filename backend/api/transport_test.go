@@ -74,6 +74,7 @@ func TestTransportContract(t *testing.T) {
 	photo.ThumbnailWidth = 50
 	photo.ThumbnailHeight = 50
 	setup.CoverPhoto = photo
+	setup.SourceSetupID = &id
 	historical := setup
 	historical.ChassisModelID = &id
 	historical.Chassis = &setups.SearchChassis{ModelID: id, ModelName: "RD2.0", BrandID: id, BrandName: "Yokomo"}
