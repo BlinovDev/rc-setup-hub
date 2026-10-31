@@ -18,9 +18,12 @@ func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: po
 
 // Both reads and mutation results use the same read-only historical projection.
 // No activation filter is used here; is_active only controls new selection.
-const displayColumns = `s.id::text,s.owner_id::text,s.chassis_model_id::text,s.title,s.visibility,s.data,s.notes,s.schema_version,s.created_at,s.updated_at,s.moderation_status,CASE WHEN EXISTS(SELECT 1 FROM setups source WHERE source.id=s.source_setup_id AND source.visibility='public' AND source.moderation_status='approved') THEN s.source_setup_id::text ELSE NULL END,
+const displayColumns = `s.id::text,s.owner_id::text,s.chassis_model_id::text,s.title,s.visibility,s.data,s.notes,s.schema_version,s.created_at,s.updated_at,s.moderation_status,source.id::text,
  m.id::text,m.name,b.id::text,b.name, ` + coverPhotoJSON + `,dm.id::text,dm.name,fm.id::text,fm.name,rm.id::text,rm.name,km.id::text,km.name,fwm.id::text,fwm.name,ftm.id::text,ftm.name,rwm.id::text,rwm.name,rtm.id::text,rtm.name`
-const displayJoins = ` LEFT JOIN chassis_models m ON m.id=s.chassis_model_id LEFT JOIN chassis_brands b ON b.id=m.brand_id LEFT JOIN setup_photos cp ON cp.setup_id=s.id AND cp.is_cover
+
+// Filter lineage in a unique-key join rather than a correlated projection subplan.
+const displayJoins = ` LEFT JOIN setups source ON source.id=s.source_setup_id AND source.visibility='public' AND source.moderation_status='approved'
+ LEFT JOIN chassis_models m ON m.id=s.chassis_model_id LEFT JOIN chassis_brands b ON b.id=m.brand_id LEFT JOIN setup_photos cp ON cp.setup_id=s.id AND cp.is_cover
  LEFT JOIN chassis_brands dm ON dm.id::text=(s.data #>> '{rear_differential,manufacturer_id}')
  LEFT JOIN chassis_brands fm ON fm.id::text=(s.data #>> '{suspension,front,lower_arm_mount,manufacturer_id}')
  LEFT JOIN chassis_brands rm ON rm.id::text=(s.data #>> '{suspension,rear,lower_arm_mount,manufacturer_id}')
