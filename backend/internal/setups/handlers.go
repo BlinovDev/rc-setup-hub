@@ -34,6 +34,7 @@ func (h *Handler) RegisterPublicAPI(r chi.Router) {
 }
 func (h *Handler) RegisterPrivateAPI(r chi.Router) {
 	r.Post("/setups", h.create)
+	r.Post("/setups/{id}/clone", h.clone)
 	r.Patch("/setups/{id}", h.patch)
 	r.Delete("/setups/{id}", h.delete)
 	r.Get("/me/setups", h.list)

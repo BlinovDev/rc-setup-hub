@@ -73,6 +73,23 @@ There is one pending/accepted relationship per unordered user pair; no self-frie
 Only the pending addressee accepts. Requester cancels, addressee rejects, either
 accepted participant removes. Pending grants nothing; removal revokes friends access.
 
+## Independent setup clones
+
+Authenticated users may clone only currently approved public setups, including
+own public setups; friends/private and pending/rejected public sources never
+qualify. The mutation holds the source row through commit, copies original
+schema-v1 technical JSONB, historical chassis references and notes, and preserves
+zero/null/precision. No photos, cover, review metadata or media are copied. The new
+setup belongs to the caller and starts private/pending. Truncate the base title
+to 143 Unicode characters and append ` (Copy)`.
+
+A caller-scoped UUID request receipt prevents duplicates, including concurrent
+retries. Distinct deliberate request IDs create independent copies. Replays still
+require source eligibility; a request reused for another source or a deleted copy
+conflicts. Lineage is a nullable self-FK with ON DELETE SET NULL; source changes
+never mutate the copy. Only expose the lineage UUID while the source is approved
+public, a conservative subset of readable sources; no hidden source metadata.
+
 ## Optional arm spacing
 
 Each axle/arm independently has optional top/lower totals ahead of/behind the arm
