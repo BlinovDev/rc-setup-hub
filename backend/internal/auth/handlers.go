@@ -64,7 +64,7 @@ func (h *Handler) RegisterWithPublic(r chi.Router, publicRoutes []func(chi.Route
 				w.WriteHeader(http.StatusNoContent)
 			})
 			r.Get("/me", func(w http.ResponseWriter, r *http.Request) { httpjson.Write(w, 200, currentUser(r)) })
-			r.Patch("/me", h.updateNickname)
+			r.Patch("/me", h.updateProfile)
 			for _, register := range apiRoutes {
 				register(r)
 			}
@@ -189,19 +189,17 @@ func (h *Handler) checkOrigin(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
-func (h *Handler) updateNickname(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) updateProfile(w http.ResponseWriter, r *http.Request) {
 	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || contentType != "application/json" {
 		httpjson.Error(w, 415, "Content-Type must be application/json")
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	r.Body = http.MaxBytesReader(w, r.Body, 8192)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
-	var input struct {
-		Nickname string `json:"nickname"`
-	}
-	if err := decoder.Decode(&input); err != nil {
+	var input *users.PatchProfile
+	if err := decoder.Decode(&input); err != nil || input == nil {
 		httpjson.Error(w, 400, "invalid JSON body")
 		return
 	}
@@ -209,9 +207,11 @@ func (h *Handler) updateNickname(w http.ResponseWriter, r *http.Request) {
 		httpjson.Error(w, 400, "invalid JSON body")
 		return
 	}
-	user, err := h.users.UpdateNickname(r.Context(), currentUser(r).ID, input.Nickname)
+	user, err := h.users.UpdateProfile(r.Context(), currentUser(r).ID, *input)
 	if err != nil {
 		switch {
+		case errors.Is(err, users.ErrInvalidProfile):
+			httpjson.Error(w, 400, users.ErrInvalidProfile.Error())
 		case errors.Is(err, users.ErrInvalidNickname):
 			httpjson.Error(w, 400, users.ErrInvalidNickname.Error())
 		case errors.Is(err, users.ErrNicknameConflict):

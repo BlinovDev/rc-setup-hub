@@ -9,6 +9,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/photos"
 )
 
 var (
@@ -20,17 +22,25 @@ var (
 
 // User is the application profile exposed to its owner. Google identity is not public.
 type User struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Nickname  string    `json:"nickname"`
-	AvatarURL *string   `json:"avatar_url"`
-	CreatedAt time.Time `json:"created_at"`
+	ID              string    `json:"id"`
+	Email           string    `json:"email"`
+	Nickname        string    `json:"nickname"`
+	AvatarURL       *string   `json:"avatar_url"`
+	CreatedAt       time.Time `json:"created_at"`
+	InstagramURL    *string   `json:"instagram_url"`
+	TikTokURL       *string   `json:"tiktok_url"`
+	YouTubeURL      *string   `json:"youtube_url"`
+	HasCustomAvatar bool      `json:"has_custom_avatar"`
 }
 
 // Identity contains verified provider claims, never client-supplied profile fields.
 type Identity struct{ Subject, Email, Name, AvatarURL string }
 
-type Service struct{ repo *Repository }
+type Service struct {
+	repo        *Repository
+	avatars     *photos.Store
+	avatarSlots chan struct{}
+}
 
 func NewService(repo *Repository) *Service                          { return &Service{repo: repo} }
 func (s *Service) Get(ctx context.Context, id string) (User, error) { return s.repo.Get(ctx, id) }

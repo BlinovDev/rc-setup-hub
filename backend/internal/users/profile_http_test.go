@@ -99,7 +99,7 @@ func TestPublicProfileHTTP(t *testing.T) {
 				}
 				var fields map[string]json.RawMessage
 				_ = json.Unmarshal(w.Body.Bytes(), &fields)
-				if len(fields) != 3 {
+				if len(fields) != 8 {
 					t.Fatal("unexpected public fields", fields)
 				}
 			}

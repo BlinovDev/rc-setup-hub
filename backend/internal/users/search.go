@@ -29,7 +29,7 @@ func (s *Service) Search(ctx context.Context, callerID, query string) ([]PublicP
 
 // Search matches a literal case-insensitive nickname substring, never email.
 func (r *Repository) Search(ctx context.Context, callerID, query string) ([]PublicProfile, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id::text,nickname,avatar_url FROM users WHERE id<>$1 AND strpos(lower(nickname),lower($2))>0 ORDER BY lower(nickname),id LIMIT 20`, callerID, query)
+	rows, err := r.pool.Query(ctx, `SELECT id::text,nickname,`+AvatarURLSQL("")+` FROM users WHERE id<>$1 AND strpos(lower(nickname),lower($2))>0 ORDER BY lower(nickname),id LIMIT 20`, callerID, query)
 	if err != nil {
 		return nil, err
 	}

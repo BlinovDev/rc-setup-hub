@@ -152,7 +152,7 @@ paths:
           $ref: '#/components/responses/InternalError'
     patch:
       operationId: patchMe
-      summary: Change current nickname
+      summary: Change current profile details
       tags:
         - Users
       responses:
@@ -174,14 +174,120 @@ paths:
           $ref: '#/components/responses/UnsupportedMediaType'
         "500":
           $ref: '#/components/responses/InternalError'
-      description: Trims whitespace; rejects empty/overlong nickname. Case-insensitive
-        duplicate nickname returns 409.
+      description: Owner-only partial update. Omitted fields stay unchanged; null or an empty
+        social URL clears that link. Nickname cannot be null/empty. All fields validate
+        before the atomic update. Duplicate nickname returns 409. JSON limit 8192 bytes.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PatchMe'
+  /api/v1/me/avatar:
+    put:
+      operationId: putMyAvatar
+      summary: Upload or replace the current user's custom avatar
+      tags: [Users]
+      description: >-
+        Owner is exclusively the authenticated session user. Multipart contains exactly one file
+        and no other fields. Nonempty file <=10 MiB, body <=10 MiB+64 KiB, <=50 MP.
+        Actual JPEG/PNG/WebP/HEIC/HEIF content selects the bounded decoder; filename and
+        declared MIME never grant a format. First-frame orientation, metadata stripping,
+        center square crop and JPEG normalization, maximum 640x640 without upscaling.
+        Replaces only the account avatar, not setup photos or the Google fallback.
+        Replacement creates a fresh avatar URL; retired URLs return 404. No automatic retries.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Updated owner profile; avatar_url is the current custom media URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "500":
+          $ref: '#/components/responses/InternalError'
+        "503":
+          description: Avatar upload capacity busy; retry explicitly later.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+    delete:
+      operationId: deleteMyAvatar
+      summary: Remove the current user's custom avatar
+      tags: [Users]
+      description: Owner-only, repeat-safe. Returns the latest Google avatar fallback or null for the client placeholder. Retired URLs return 404; durable file cleanup retries on restart.
+      responses:
+        "200":
+          description: Updated owner profile with has_custom_avatar=false.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "500":
+          $ref: '#/components/responses/InternalError'
+  /api/v1/users/{user_id}/avatar/{avatar_id}:
+    get:
+      security: []
+      operationId: getUserAvatar
+      summary: Read a user's current custom square avatar
+      tags: [Users]
+      description: >-
+        Public account media, independent of setup visibility. Both UUIDs must identify
+        the current avatar; replacement/removal/account deletion revokes old URLs with 404.
+        Authorization is rechecked before delivery. No redirects to provider media.
+        Cache-Control no-store, private; nosniff; no ETag, Last-Modified or conditional 304.
+        Previously downloaded/in-flight authorized bytes cannot be revoked retroactively.
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: avatar_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        "200":
+          description: Normalized square JPEG, at most 640px; no upscaling.
+          content:
+            image/jpeg:
+              schema: {type: string, format: binary}
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "414":
+          $ref: '#/components/responses/PublicURITooLong'
+        "429":
+          $ref: '#/components/responses/PublicReadsBusy'
+        "500":
+          $ref: '#/components/responses/InternalError'
   /api/v1/users/{user_id}:
     get:
       security: []
@@ -189,7 +295,7 @@ paths:
       summary: Get an application user's public profile
       tags:
         - Users
-      description: Guest or authenticated lookup for direct frontend profile URLs, including users with no public setups. Returns only id, nickname and nullable avatar_url, without email, provider identity or friendship state.
+      description: Guest or authenticated lookup for direct frontend profile URLs, including users with no public setups. Returns only safe nickname/avatar, validated social links, member_since and approved public_setup_count, without email, provider identity or friendship state.
       parameters:
         - name: user_id
           in: path
@@ -208,7 +314,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PublicProfile'
+                $ref: '#/components/schemas/DriverProfile'
         "400":
           $ref: '#/components/responses/BadRequest'
         "404":
@@ -1302,6 +1408,16 @@ components:
           type:
             - string
             - "null"
+        instagram_url:
+          $ref: '#/components/schemas/SocialURL'
+        tiktok_url:
+          $ref: '#/components/schemas/SocialURL'
+        youtube_url:
+          $ref: '#/components/schemas/SocialURL'
+        has_custom_avatar:
+          type: boolean
+          readOnly: true
+          description: Whether avatar_url currently selects an app-managed custom avatar.
         created_at:
           type: string
           format: date-time
@@ -1311,8 +1427,13 @@ components:
         - nickname
         - avatar_url
         - created_at
+        - instagram_url
+        - tiktok_url
+        - youtube_url
+        - has_custom_avatar
       description: Current authenticated application profile. Email is exposed only
-        to this user.
+        to this user. avatar_url prefers the current app-managed relative API URL,
+        then the Google URL, then null for the client placeholder.
     PublicProfile:
       type: object
       additionalProperties: false
@@ -1335,6 +1456,58 @@ components:
         - nickname
         - avatar_url
       description: 'Safe public profile: no email or provider identity.'
+    DriverProfile:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        nickname:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Trimmed, non-empty nickname, case-insensitively unique. No
+            null bytes.
+        avatar_url:
+          type:
+            - string
+            - "null"
+        instagram_url:
+          $ref: '#/components/schemas/SocialURL'
+        tiktok_url:
+          $ref: '#/components/schemas/SocialURL'
+        youtube_url:
+          $ref: '#/components/schemas/SocialURL'
+        member_since:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Existing user creation timestamp in UTC; never a stored duration.
+        public_setup_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: Current count of visibility=public AND moderation_status=approved only, identical for every viewer.
+      required:
+        - id
+        - nickname
+        - avatar_url
+        - instagram_url
+        - tiktok_url
+        - youtube_url
+        - member_since
+        - public_setup_count
+      description: Safe public driver detail. No email, provider identity, private counts or storage keys.
+    SocialURL:
+      type: [string, "null"]
+      maxLength: 2048
+      description: >-
+        Optional HTTPS platform profile URL. Instagram instagram.com/www.instagram.com
+        /username; TikTok tiktok.com/www.tiktok.com /@username; YouTube youtube.com/www.youtube.com
+        /@handle, /channel/id, /c/name or /user/name. No userinfo, port, escaped path,
+        query, fragment, short link or redirect endpoints. Empty string/null clears on PATCH;
+        reads return canonical validated URLs or null. Never fetched by the backend.
     ChassisBrand:
       type: object
       additionalProperties: false
@@ -2173,10 +2346,15 @@ components:
           maxLength: 64
           description: Trimmed, non-empty nickname, case-insensitively unique. No
             null bytes.
-      required:
-        - nickname
-      description: 'Nickname only. Unknown fields are rejected. JSON body limit: 4096
-        bytes.'
+        instagram_url:
+          $ref: '#/components/schemas/SocialURL'
+        tiktok_url:
+          $ref: '#/components/schemas/SocialURL'
+        youtube_url:
+          $ref: '#/components/schemas/SocialURL'
+      minProperties: 1
+      description: Partial owner update; omitted fields unchanged, null/empty socials cleared. Nickname remains non-null. Unknown fields rejected. JSON limit 8192 bytes.
+
     SetupSearchChassis:
       type: object
       additionalProperties: false

@@ -51,7 +51,8 @@ for atomicity, keys/indexes, photo receipts/outbox and migration/rollback constr
 - Only the explicit GET registrations in [API](api.md#anonymous-public-reads-issue-42)
   permit optional sessions. All mutations/account/friendship/admin paths retain required
   authentication. Guest reads have bounded aggregate work; forwarding headers are not trusted.
-- Public profiles expose safe application UUID/nickname/avatar only. Owner email and
+- Public summaries expose safe application UUID/nickname/avatar; profile details add
+  validated social links, membership date and only approved-public setup counts. Owner email and
   provider identity never appear in public setup/profile/search projections.
 - JSON responses and admin HTML use no-store; unexpected errors remain generic.
   Central request logging/panic recovery must not disclose credentials or raw DB errors.

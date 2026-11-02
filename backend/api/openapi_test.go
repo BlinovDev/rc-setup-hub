@@ -51,7 +51,7 @@ func TestOpenAPIContract(t *testing.T) {
 	}
 	for path, methods := range map[string][]string{
 		"/health": {"get"}, "/openapi.yaml": {"get"}, "/auth/google": {"get"}, "/auth/google/callback": {"get"},
-		"/api/v1/users/{user_id}/public-setups": {"get"}, "/api/v1/users/{user_id}": {"get"}, "/api/v1/auth/logout": {"post"}, "/api/v1/me": {"get", "patch"}, "/api/v1/users/search": {"get"},
+		"/api/v1/users/{user_id}/public-setups": {"get"}, "/api/v1/users/{user_id}": {"get"}, "/api/v1/auth/logout": {"post"}, "/api/v1/me/avatar": {"put", "delete"}, "/api/v1/users/{user_id}/avatar/{avatar_id}": {"get"}, "/api/v1/me": {"get", "patch"}, "/api/v1/users/search": {"get"},
 		"/api/v1/friendships": {"get", "post"}, "/api/v1/friendships/{id}/accept": {"post"}, "/api/v1/friendships/{id}": {"delete"},
 		"/api/v1/chassis/brands": {"get"}, "/api/v1/chassis/brands/{brand_id}/models": {"get"},
 		"/api/v1/setups/{id}/clone": {"post"}, "/api/v1/setups": {"post"}, "/api/v1/setups/{id}": {"get", "patch", "delete"},
@@ -70,7 +70,7 @@ func TestOpenAPIContract(t *testing.T) {
 				continue
 			}
 			if strings.HasPrefix(path, "/api/v1/") {
-				public := method == "get" && (path == "/api/v1/users/{user_id}" || path == "/api/v1/users/{user_id}/public-setups" || path == "/api/v1/chassis/brands" || path == "/api/v1/chassis/brands/{brand_id}/models" || path == "/api/v1/setups/search" || path == "/api/v1/setups/visible" || path == "/api/v1/setups/compare" || path == "/api/v1/setups/{id}" || path == "/api/v1/setups/{id}/photos" || path == "/api/v1/setups/{id}/photos/{photo_id}/image" || path == "/api/v1/setups/{id}/photos/{photo_id}/thumbnail")
+				public := method == "get" && (path == "/api/v1/users/{user_id}/avatar/{avatar_id}" || path == "/api/v1/users/{user_id}" || path == "/api/v1/users/{user_id}/public-setups" || path == "/api/v1/chassis/brands" || path == "/api/v1/chassis/brands/{brand_id}/models" || path == "/api/v1/setups/search" || path == "/api/v1/setups/visible" || path == "/api/v1/setups/compare" || path == "/api/v1/setups/{id}" || path == "/api/v1/setups/{id}/photos" || path == "/api/v1/setups/{id}/photos/{photo_id}/image" || path == "/api/v1/setups/{id}/photos/{photo_id}/thumbnail")
 				security, overridden := op["security"]
 				if public {
 					values, ok := security.([]any)
@@ -83,7 +83,7 @@ func TestOpenAPIContract(t *testing.T) {
 			}
 		}
 	}
-	for _, name := range []string{"SetupPhoto", "User", "PublicProfile", "ChassisBrand", "ChassisModel", "Setup", "SetupDataV1", "SteeringKnuckle", "RearDifferential", "DifferentialManufacturer", "Suspension", "AxleSuspension", "RunningGear", "AxleRunningGear", "Hex", "Wheel", "Tire", "RunningGearManufacturers", "AxleRunningGearManufacturers", "LowerArmMount", "LowerArmMountManufacturers", "LinkLength", "Shocks", "Shock", "ShockPiston", "ShockSeal", "Spring", "Electronics", "SetupSearchItem", "SetupSearchChassis", "SetupSearchPage", "SetupComparison", "FriendshipRelationship", "FriendshipItem", "FriendshipList", "APIError"} {
+	for _, name := range []string{"DriverProfile", "SocialURL", "SetupPhoto", "User", "PublicProfile", "ChassisBrand", "ChassisModel", "Setup", "SetupDataV1", "SteeringKnuckle", "RearDifferential", "DifferentialManufacturer", "Suspension", "AxleSuspension", "RunningGear", "AxleRunningGear", "Hex", "Wheel", "Tire", "RunningGearManufacturers", "AxleRunningGearManufacturers", "LowerArmMount", "LowerArmMountManufacturers", "LinkLength", "Shocks", "Shock", "ShockPiston", "ShockSeal", "Spring", "Electronics", "SetupSearchItem", "SetupSearchChassis", "SetupSearchPage", "SetupComparison", "FriendshipRelationship", "FriendshipItem", "FriendshipList", "APIError"} {
 		if _, exists := contract.Components.Schemas[name]; !exists {
 			t.Errorf("missing schema %s", name)
 		}

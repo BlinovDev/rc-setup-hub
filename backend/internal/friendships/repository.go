@@ -7,6 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
 )
 
 type Repository struct{ pool *pgxpool.Pool }
@@ -70,7 +72,7 @@ func (r *Repository) Delete(ctx context.Context, callerID, id string) error {
 
 // list fetches the other participant's public profile in one query.
 func (r *Repository) list(ctx context.Context, callerID string) ([]listedRelationship, error) {
-	rows, err := r.pool.Query(ctx, `SELECT f.id::text,f.status,f.addressee_id=$1,u.id::text,u.nickname,u.avatar_url,f.created_at,f.updated_at
+	rows, err := r.pool.Query(ctx, `SELECT f.id::text,f.status,f.addressee_id=$1,u.id::text,u.nickname,`+users.AvatarURLSQL("u")+`,f.created_at,f.updated_at
  FROM friendships f JOIN users u ON u.id=CASE WHEN f.requester_id=$1 THEN f.addressee_id ELSE f.requester_id END
  WHERE f.requester_id=$1 OR f.addressee_id=$1 ORDER BY f.updated_at DESC,f.id DESC`, callerID)
 	if err != nil {

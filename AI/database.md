@@ -100,3 +100,22 @@ missing referenced media fails startup. Legacy thumbnail.jpg is kept with full.j
 for compatibility/rollback. Down drops crop metadata, reverting to that baseline;
 archive coherent DB/media before rollback. Backup/restore must retain current version
 directories, not just full-image keys; no media relocation/new storage is introduced.
+
+## Driver profiles (migration 00011)
+
+Nullable platform URL columns and the custom-avatar ID/key pair extend users without
+rewriting existing identity, Google avatar or creation timestamps. Google login updates
+only the provider fallback; SQL projections prefer custom media. Membership is not
+stored twice; approved-public count is computed from setups at read time.
+
+Avatars reuse the bounded decoder/atomic publication primitive in a separate
+`MEDIA_DIR/avatars` namespace. Only its normalized square thumbnail is served.
+Single-row replacement serializes writers and queues the superseded key via trigger;
+user deletion also queues cleanup. `user_avatar_deletions` survives account deletion.
+A bounded request cleanup and minute/startup reconciliation retry failures, verify
+referenced square media, then sweep publications older than one hour only after a
+successful inventory. Uncertain write outcomes retain files for reconciliation.
+Setup-photo reconciliation ignores this named subdirectory; avatar sweeps never touch
+photo keys. Existing recursive coherent DB+MEDIA_DIR backups include both namespaces.
+Down migration discards profile extensions/cleanup metadata, not files; archive a
+coherent DB/media snapshot before destructive rollback.

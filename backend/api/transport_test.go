@@ -90,7 +90,7 @@ func TestTransportContract(t *testing.T) {
 		{"/api/v1/setups/" + id + "/photos", []setups.Photo{*photo}},
 		{"/api/v1/me", users.User{ID: id, Email: "driver@example.com", Nickname: "Driver", CreatedAt: now}},
 		{"/api/v1/users/search", []users.PublicProfile{profile}},
-		{"/api/v1/users/" + id, profile},
+		{"/api/v1/users/" + id, users.DriverProfile{PublicProfile: profile, MemberSince: now, PublicSetupCount: 0}},
 		{"/api/v1/setups/" + id, setup},
 		{"/api/v1/me/setups", []setups.Setup{setup, historical, legacy}},
 		{"/api/v1/setups/" + id, historical},
@@ -115,6 +115,34 @@ func TestTransportContract(t *testing.T) {
 				t.Fatalf("response outside contract: %s: %+v", body, errs)
 			}
 		})
+	}
+
+	for _, tc := range []struct {
+		body  string
+		valid bool
+	}{
+		{`{"nickname":"Driver"}`, true},
+		{`{"instagram_url":"https://instagram.com/driver","tiktok_url":"https://tiktok.com/@driver","youtube_url":"https://youtube.com/@driver"}`, true},
+		{`{"instagram_url":null,"tiktok_url":"","youtube_url":null}`, true},
+		{`{}`, false}, {`{"nickname":null}`, false}, {`{"avatar_url":"https://evil.test/a"}`, false},
+		{`{"public_setup_count":99}`, false}, {`{"has_custom_avatar":true}`, false},
+	} {
+		req := httptest.NewRequest("PATCH", "/api/v1/me", strings.NewReader(tc.body))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "rc_session", Value: "contract-test-cookie"})
+		if valid, errs := validate.ValidateHttpRequest(req); valid != tc.valid {
+			t.Fatalf("profile request valid=%v want=%v: %+v", valid, tc.valid, errs)
+		}
+	}
+	for _, method := range []string{"PUT", "DELETE"} {
+		req := httptest.NewRequest(method, "/api/v1/me/avatar", nil)
+		response := httptest.NewRecorder()
+		response.Header().Set("Content-Type", "application/json")
+		response.WriteHeader(200)
+		_ = json.NewEncoder(response).Encode(users.User{ID: id, Email: "driver@example.com", Nickname: "Driver", CreatedAt: now})
+		if valid, errs := validate.ValidateHttpResponse(req, response.Result()); !valid || len(errs) > 0 {
+			t.Fatalf("avatar %s owner response: %+v", method, errs)
+		}
 	}
 	for _, body := range []string{`{"expected_revision":0,"crop":null}`, `{"expected_revision":1,"crop":{"x":0,"y":10,"size":20}}`} {
 		req := httptest.NewRequest("PUT", "/api/v1/setups/"+id+"/photos/"+id+"/crop", strings.NewReader(body))
