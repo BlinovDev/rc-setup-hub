@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/admin"
 	"github.com/BlinovDev/rc-setup-hub/backend/internal/auth"
@@ -163,8 +164,24 @@ func TestAnonymousPublicHTTP(t *testing.T) {
 	for _, person := range []account{owner, empty} {
 		w := request(router, "GET", "/api/v1/users/"+person.user.ID, "", nil)
 		var profile map[string]any
-		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &profile) != nil || len(profile) != 3 || profile["id"] != person.user.ID || profile["nickname"] == nil {
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &profile) != nil || len(profile) != 8 || profile["id"] != person.user.ID || profile["nickname"] != person.user.Nickname {
 			t.Fatal("unsafe profile", w.Code, w.Body)
+		}
+		for _, field := range []string{"id", "nickname", "avatar_url", "member_since", "public_setup_count", "instagram_url", "tiktok_url", "youtube_url"} {
+			if _, ok := profile[field]; !ok {
+				t.Fatal("missing public field", field, profile)
+			}
+		}
+		wantCount := float64(0)
+		if person.user.ID == owner.user.ID {
+			wantCount = 1
+		}
+		var wantAvatar any
+		if person.user.AvatarURL != nil {
+			wantAvatar = *person.user.AvatarURL
+		}
+		if profile["member_since"] != person.user.CreatedAt.Format(time.RFC3339Nano) || profile["public_setup_count"] != wantCount || profile["avatar_url"] != wantAvatar || profile["instagram_url"] != nil || profile["tiktok_url"] != nil || profile["youtube_url"] != nil {
+			t.Fatal("incorrect safe profile details or hidden setup count", profile)
 		}
 	}
 	for _, person := range []account{empty, stranger} {

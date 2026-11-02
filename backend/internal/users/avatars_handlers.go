@@ -92,7 +92,7 @@ func (h *Handler) avatar(w http.ResponseWriter, r *http.Request) {
 	id, avatarID := chi.URLParam(r, "user_id"), chi.URLParam(r, "avatar_id")
 	for _, value := range []string{id, avatarID} {
 		var uuid pgtype.UUID
-		if err := uuid.Scan(value); err != nil || !uuid.Valid {
+		if err := uuid.Scan(value); len(value) != 36 || err != nil || !uuid.Valid {
 			httpjson.Error(w, 400, "invalid user or avatar UUID")
 			return
 		}
