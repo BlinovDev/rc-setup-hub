@@ -32,10 +32,25 @@ exact configured CORS origin. The explicit [anonymous GET allowlist](#anonymous-
 - `POST /api/v1/auth/logout`: 204, revokes session server-side and expires cookie.
 - `GET /api/v1/me`: 200 current profile: id, email, nickname, nullable avatar_url,
   created_at. Provider subject/session internals are excluded.
-- `PATCH /api/v1/me`: nickname only, trimmed, non-empty, at most 64 characters,
-  no null bytes. Strict application/json object, 4096-byte limit. Success 200
-  current profile; invalid input 400; duplicate case-insensitive nickname 409;
-  wrong Content-Type 415. Unknown fields are rejected.
+- `PATCH /api/v1/me`: owner-only partial nickname/social update. Nickname remains
+  trimmed, nonempty, <=64 characters, no NUL; duplicate case-insensitive nickname
+  is 409. `instagram_url`, `tiktok_url`, `youtube_url` accept validated HTTPS profile
+  URLs or null/empty to clear; omission preserves each field. Strict JSON object,
+  unknown fields rejected, 8192-byte limit; wrong Content-Type 415. All fields validate
+  before an atomic update. No avatar/provider/owner URL or identity input.
+- `PUT /api/v1/me/avatar`: owner-only multipart with exactly one `file`. At most
+  10 MiB/50 MP, actual JPEG/PNG/WebP/HEIC/HEIF content; declared MIME/name cannot grant
+  a decoder. Reuses bounded decoding, orientation and metadata stripping; serves a
+  center-square JPEG <=640px without upscaling. 200 returns the updated owner profile.
+  `DELETE` returns 200 with the Google fallback, or null for the client placeholder.
+  Current profile includes social links and `has_custom_avatar`; OAuth refresh retains
+  custom media and updates only the underlying Google fallback.
+- `GET /api/v1/users/{user_id}/avatar/{avatar_id}`: public current-avatar JPEG,
+  no-store/private/nosniff, no ETag/Last-Modified/304. Replaced/removed/deleted-account
+  avatar URLs return 404; previously downloaded/in-flight bytes cannot be revoked.
+  Storage keys are never URLs. Upload/delete use existing session/origin checks;
+  invalid input 400, missing identity 401, untrusted origin 403, unavailable avatar 404,
+  busy upload 503, unexpected failure generic 500.
 
 First login derives a readable nickname from profile name, then email local part,
 then `driver`, keeping letters/digits/hyphens/underscores and replacing spaces with
@@ -48,11 +63,18 @@ remain authenticated and credentialed; token/provider internals are never public
 
 ## Public user profile
 
-`GET /api/v1/users/{user_id}` permits guests and returns only the existing
-PublicProfile fields: id, nickname and nullable avatar_url. Existing user is 200,
-invalid UUID 400, valid missing user 404, unexpected database
-failure generic 500. No email, Google subject or friendship information is
-selected or exposed. This supports reloading a frontend /users/:userId route.
+`GET /api/v1/users/{user_id}` permits guests and returns DriverProfile: compact
+id/nickname/effective avatar plus nullable validated social links, `member_since`
+(existing creation timestamp) and live `public_setup_count` (only approved public
+setups, identical for guests/owners/friends). Existing user 200, invalid UUID 400,
+missing user 404, unexpected failure generic 500. Search/friendship/setup-owner
+projections retain compact PublicProfile. Custom avatar always precedes Google;
+null selects the frontend placeholder. No email/provider/storage/private counts.
+
+Social URLs are <=2048 bytes and restricted to exact platform `.com`/`www` hosts:
+Instagram `/username`, TikTok `/@username`, YouTube `/@handle`, `/channel/id`, `/c/name`
+or `/user/name`. No userinfo/ports, escaped paths, queries, fragments, short links or
+redirect routes. Backend never fetches links; persisted values are revalidated on read.
 
 ## Nickname discovery
 
@@ -379,8 +401,9 @@ Only these GET operations resolve an **optional** session:
   Clone/owner mutation policy and independent media checks remain unchanged.
 - `/api/v1/setups/{id}`: complete public technical data; owner/friend permissions
   still apply when a valid session is supplied. Missing/inaccessible is the same 404.
-- `/api/v1/users/{user_id}`: id, nickname, nullable avatar only, including users
-  without public setups. Missing user is 404; no email/provider/friendship/counts.
+- `/api/v1/users/{user_id}`: safe DriverProfile described above, including users
+  without public setups. No hidden counts/account identity.
+- `/api/v1/users/{user_id}/avatar/{avatar_id}`: current custom avatar only.
 - `/api/v1/users/{user_id}/public-setups`: public-only `SetupSearchPage` for **every**
   viewer. Same q/brand/model/limit/cursor validation and ordering as Explore, default
   20/max 50. Missing user and no public setups both yield an empty page. This separate

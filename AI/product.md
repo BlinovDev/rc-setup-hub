@@ -10,8 +10,9 @@ Change this file only for an enduring product-rule change, per [workflow](workfl
 - RC drift setups only; Google sign-in; stable Google subject identifies a user.
   Users have unique case-insensitive nicknames/emails and optional avatars.
 - The backend owns HttpOnly sessions and authorization; no client auth tokens.
-  Public profiles/search expose application UUID, nickname/avatar, never email or
-  provider identity. Nickname discovery excludes the caller; no email search.
+  Compact public search exposes application UUID, nickname/avatar, never email or
+  provider identity. Profile detail also exposes validated optional social links,
+  membership date and only the current approved-public setup count. Nickname discovery excludes the caller; no email search.
 - Admin is an environment email allowlist, not a database role. Backend-rendered
   admin manages brands/models and minimal statistics/users; ordinary users cannot.
 - Active brands/models are selectable. A model's brand is immutable on edit.
@@ -23,6 +24,15 @@ Change this file only for an enduring product-rule change, per [workflow](workfl
   Only owners write.
   Optional numbers preserve unknown versus explicit zero; supplied data replaces
   the whole technical document. Unsupported versions must not be silently reinterpreted.
+
+## Driver profile details
+
+Owners may add/change/clear Instagram, TikTok and YouTube profile links. Only safe
+HTTPS platform URLs are public. Custom uploaded avatars are account media independent
+of setup photos: normalized center square, then Google fallback, then neutral client
+placeholder. Account edits and avatar replacement/removal are owner-only. Public
+membership date derives from user creation; public setup count excludes private,
+friends-only, pending and rejected rows for every viewer. No bio or extra statistics.
 
 ## Visibility and friendship
 

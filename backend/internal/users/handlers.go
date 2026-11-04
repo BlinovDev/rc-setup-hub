@@ -20,6 +20,7 @@ func (h *Handler) RegisterAPI(r chi.Router, currentUser func(*http.Request) (Use
 
 // RegisterPublicAPI exposes only the safe application profile projection.
 func (h *Handler) RegisterPublicAPI(r chi.Router) {
+	r.Get("/users/{user_id}/avatar/{avatar_id}", h.avatar)
 	r.Get("/users/{user_id}", func(w http.ResponseWriter, r *http.Request) {
 		profile, err := h.service.GetPublic(r.Context(), chi.URLParam(r, "user_id"))
 		if err != nil {
@@ -37,6 +38,27 @@ func (h *Handler) RegisterPublicAPI(r chi.Router) {
 	})
 }
 func (h *Handler) RegisterPrivateAPI(r chi.Router, currentUser func(*http.Request) (User, bool)) {
+	r.Put("/me/avatar", func(w http.ResponseWriter, r *http.Request) {
+		user, ok := currentUser(r)
+		if !ok {
+			httpjson.Error(w, 401, "authentication required")
+			return
+		}
+		h.uploadAvatar(w, r, user.ID)
+	})
+	r.Delete("/me/avatar", func(w http.ResponseWriter, r *http.Request) {
+		user, ok := currentUser(r)
+		if !ok {
+			httpjson.Error(w, 401, "authentication required")
+			return
+		}
+		user, err := h.service.DeleteAvatar(r.Context(), user.ID)
+		if err != nil {
+			avatarFailure(w, err)
+			return
+		}
+		httpjson.Write(w, 200, user)
+	})
 	r.Get("/users/search", func(w http.ResponseWriter, r *http.Request) {
 		user, ok := currentUser(r)
 		if !ok {

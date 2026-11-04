@@ -1,6 +1,10 @@
 package setups
 
-import "context"
+import (
+	"context"
+
+	"github.com/BlinovDev/rc-setup-hub/backend/internal/users"
+)
 
 // searchPublic filters visibility in SQL and returns one joined summary query.
 // It never selects or decodes data/notes, and activation flags do not affect history.
@@ -33,7 +37,7 @@ func (r *Repository) search(ctx context.Context, params searchParameters, viewer
 	}
 	args[3], args[4] = cursorTime, cursorID
 	rows, err := r.pool.Query(ctx, `SELECT s.id::text,s.title,s.visibility,s.chassis_model_id::text,s.schema_version,s.created_at,s.updated_at,
- u.id::text,u.nickname,u.avatar_url,m.name,b.id::text,b.name, `+coverPhotoJSON+`
+ u.id::text,u.nickname,`+users.AvatarURLSQL("u")+`,m.name,b.id::text,b.name, `+coverPhotoJSON+`
  FROM setups s JOIN users u ON u.id=s.owner_id
  LEFT JOIN chassis_models m ON m.id=s.chassis_model_id
  LEFT JOIN chassis_brands b ON b.id=m.brand_id LEFT JOIN setup_photos cp ON cp.setup_id=s.id AND cp.is_cover

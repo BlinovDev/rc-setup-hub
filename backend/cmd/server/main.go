@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -35,6 +36,10 @@ func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--check-media" {
 		if _, err := photos.New(os.Getenv("MEDIA_DIR")); err != nil {
 			logger.Error("media prerequisite check failed", "error", err)
+			os.Exit(1)
+		}
+		if _, err := photos.New(filepath.Join(os.Getenv("MEDIA_DIR"), "avatars")); err != nil {
+			logger.Error("avatar media prerequisite check failed")
 			os.Exit(1)
 		}
 		logger.Info("media prerequisite check passed")
@@ -78,6 +83,16 @@ func main() {
 		logger.Error("photo storage initialization failed", "error", err)
 		os.Exit(1)
 	}
+	avatarMedia, err := photos.New(filepath.Join(os.Getenv("MEDIA_DIR"), "avatars"))
+	if err != nil {
+		logger.Error("avatar storage initialization failed")
+		os.Exit(1)
+	}
+	userService.EnableAvatars(avatarMedia)
+	if err := userService.ReconcileAvatars(ctx); err != nil {
+		logger.Error("avatar reconciliation failed")
+		os.Exit(1)
+	}
 	setupService.EnablePhotos(media)
 	if err := setupService.ReconcilePhotos(ctx); err != nil {
 		logger.Error("photo reconciliation failed", "error", err)
@@ -91,6 +106,9 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				if err := userService.ReconcileAvatars(ctx); err != nil {
+					logger.Error("avatar cleanup failed")
+				}
 				if err := setupService.ReconcilePhotos(ctx); err != nil {
 					logger.Error("photo cleanup failed", "error", err)
 				}
