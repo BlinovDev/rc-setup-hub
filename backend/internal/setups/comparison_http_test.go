@@ -89,6 +89,14 @@ func TestComparisonAndVisibleHTTP(t *testing.T) {
 			}
 		})
 	}
+	if _, err := f.pool.Exec(ctx, `UPDATE setups SET data=$2 WHERE id=$1`, f.public[0].ID, `{"weight_distribution":{"front_left_g":380,"front_right_g":400,"rear_left_g":320,"rear_right_g":350,"body_installed":true,"battery_installed":false}}`); err != nil {
+		t.Fatal(err)
+	}
+	compared := request(router, http.MethodGet, path(f.public[0].ID, f.public[2].ID), "", owner)
+	var withWeight Comparison
+	if compared.Code != http.StatusOK || json.Unmarshal(compared.Body.Bytes(), &withWeight) != nil || withWeight.Left.Data.WeightDistribution == nil || withWeight.Left.Data.WeightDistribution.FrontLeftG == nil || *withWeight.Left.Data.WeightDistribution.FrontLeftG != 380 || withWeight.Right.Data.WeightDistribution != nil {
+		t.Fatalf("authorized comparison did not preserve optional weight distribution: HTTP %d %s", compared.Code, compared.Body)
+	}
 	for _, query := range []string{"", "left_id=" + f.public[0].ID, "left_id=&right_id=" + f.public[1].ID,
 		"left_id=bad&right_id=" + f.public[1].ID, "left_id=" + f.public[0].ID + "&right_id=bad",
 		"left_id=" + f.public[0].ID + "&right_id=" + strings.ToUpper(f.public[0].ID),

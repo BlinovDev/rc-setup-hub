@@ -88,11 +88,12 @@ type AxleRunningGearManufacturers struct {
 type DataV1 struct {
 	RunningGear *RunningGear `json:"running_gear,omitempty"`
 
-	FrontSteeringKnuckle *SteeringKnuckle  `json:"front_steering_knuckle,omitempty"`
-	RearDifferential     *RearDifferential `json:"rear_differential,omitempty"`
-	Suspension           *Suspension       `json:"suspension,omitempty"`
-	Shocks               *Shocks           `json:"shocks,omitempty"`
-	Electronics          *Electronics      `json:"electronics,omitempty"`
+	FrontSteeringKnuckle *SteeringKnuckle    `json:"front_steering_knuckle,omitempty"`
+	RearDifferential     *RearDifferential   `json:"rear_differential,omitempty"`
+	Suspension           *Suspension         `json:"suspension,omitempty"`
+	Shocks               *Shocks             `json:"shocks,omitempty"`
+	Electronics          *Electronics        `json:"electronics,omitempty"`
+	WeightDistribution   *WeightDistribution `json:"weight_distribution,omitempty"`
 }
 type Suspension struct {
 	Front *AxleSuspension `json:"front,omitempty"`
@@ -225,6 +226,17 @@ type Electronics struct {
 	Servo string `json:"servo,omitempty"`
 	Gyro  string `json:"gyro,omitempty"`
 	Radio string `json:"radio,omitempty"`
+}
+
+// WeightDistribution is one optional four-corner measurement in grams.
+// The condition flags describe the same weighing and are always serialized.
+type WeightDistribution struct {
+	FrontLeftG       *float64 `json:"front_left_g,omitempty"`
+	FrontRightG      *float64 `json:"front_right_g,omitempty"`
+	RearLeftG        *float64 `json:"rear_left_g,omitempty"`
+	RearRightG       *float64 `json:"rear_right_g,omitempty"`
+	BodyInstalled    bool     `json:"body_installed"`
+	BatteryInstalled bool     `json:"battery_installed"`
 }
 
 // DifferentialManufacturer is the shared historical brand display shape, including inactive brands.

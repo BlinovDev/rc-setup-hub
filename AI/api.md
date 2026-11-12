@@ -193,6 +193,14 @@ Read-only `lower_arm_mount_manufacturers` joins front/rear historical names once
 (including inactive brands), or null when neither resolves. Schema remains v1 with
 no migration/defaults; full-data replacement and compatibility requirements apply.
 
+Optional `weight_distribution` records one four-corner measurement in grams with
+`front_left_g`, `front_right_g`, `rear_left_g`, and `rear_right_g`, plus explicit
+`body_installed` and `battery_installed` booleans. All four finite positive weights
+are required together; an empty block or conditions without weights is omitted.
+Totals and percentages are derived by clients and are not persisted. This additive
+schema-v1 JSONB extension needs no migration; clone and authorized Compare responses
+preserve the measurement. Technical edits do not trigger photo re-moderation.
+
 All sections and most technical fields are optional. Omitted/null optional
 numeric fields mean unknown and are omitted on output; **toe_deg: 0 is a real
 value preserved by pointer-backed Go structs**. Optional null sections/technical

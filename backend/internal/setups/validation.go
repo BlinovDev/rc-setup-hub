@@ -38,6 +38,33 @@ func technical(value *string) error {
 }
 func finite(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }
 func normalizeData(data *DataV1) error {
+	if measurement := data.WeightDistribution; measurement != nil {
+		weights := []*float64{
+			measurement.FrontLeftG,
+			measurement.FrontRightG,
+			measurement.RearLeftG,
+			measurement.RearRightG,
+		}
+		provided := 0
+		for _, weight := range weights {
+			if weight != nil {
+				provided++
+			}
+		}
+		if provided == 0 {
+			// Conditions alone do not create a measurement.
+			data.WeightDistribution = nil
+		} else {
+			if provided != len(weights) {
+				return invalid("weight distribution requires all four wheel weights")
+			}
+			for _, weight := range weights {
+				if !finite(*weight) || *weight <= 0 {
+					return invalid("wheel weights must be finite numbers greater than zero")
+				}
+			}
+		}
+	}
 	if err := normalizeRunningGear(data); err != nil {
 		return err
 	}
