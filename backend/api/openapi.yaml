@@ -1670,10 +1670,15 @@ components:
           anyOf:
             - $ref: '#/components/schemas/Electronics'
             - type: "null"
+        weight_distribution:
+          anyOf:
+            - $ref: '#/components/schemas/WeightDistribution'
+            - type: "null"
       description: Schema version 1 technical document. All sections are optional;
         null sections are omitted on output. Unknown fields are rejected on input.
         Explicit numeric zero is preserved; omitted/null optional numeric values are
-        unknown. PATCH replaces this entire document, without a deep merge.
+        unknown. PATCH replaces this entire document, without a deep merge. Weight
+        distribution is additive schema-v1 JSONB and needs no database migration.
     SteeringKnuckle:
       type: object
       additionalProperties: false
@@ -2027,6 +2032,43 @@ components:
           maxLength: 200
           description: Trimmed technical text without null bytes. Null, omitted or
             empty text is omitted in responses.
+    WeightDistribution:
+      type: object
+      additionalProperties: false
+      properties:
+        front_left_g:
+          type: [number, "null"]
+          exclusiveMinimum: 0
+          description: Front-left wheel weight in grams. All four wheel weights must
+            be present together and finite; omitted/null values are unknown.
+        front_right_g:
+          type: [number, "null"]
+          exclusiveMinimum: 0
+          description: Front-right wheel weight in grams. All four wheel weights must
+            be present together and finite; omitted/null values are unknown.
+        rear_left_g:
+          type: [number, "null"]
+          exclusiveMinimum: 0
+          description: Rear-left wheel weight in grams. All four wheel weights must
+            be present together and finite; omitted/null values are unknown.
+        rear_right_g:
+          type: [number, "null"]
+          exclusiveMinimum: 0
+          description: Rear-right wheel weight in grams. All four wheel weights must
+            be present together and finite; omitted/null values are unknown.
+        body_installed:
+          type: boolean
+          default: false
+          description: Whether the body shell was installed during weighing. A recorded
+            measurement always serializes this condition explicitly.
+        battery_installed:
+          type: boolean
+          default: false
+          description: Whether the battery was installed during weighing. A recorded
+            measurement always serializes this condition explicitly.
+      description: Optional single four-wheel mass measurement. A partial measurement
+        is invalid. An empty block or conditions without wheel weights is omitted;
+        both conditions default to false.
     PhotoCrop:
       type: object
       additionalProperties: false

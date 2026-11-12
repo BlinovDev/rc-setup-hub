@@ -105,3 +105,48 @@ func TestSetupValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestWeightDistributionValidationAndSerialization(t *testing.T) {
+	weights := func(fl, fr, rl, rr float64) *WeightDistribution {
+		return &WeightDistribution{
+			FrontLeftG: &fl, FrontRightG: &fr, RearLeftG: &rl, RearRightG: &rr,
+			BodyInstalled: true,
+		}
+	}
+	for _, tc := range []struct {
+		name    string
+		value   *WeightDistribution
+		valid   bool
+		removed bool
+	}{
+		{name: "missing section", valid: true},
+		{name: "empty section pruned", value: &WeightDistribution{}, valid: true, removed: true},
+		{name: "conditions alone pruned", value: &WeightDistribution{BodyInstalled: true}, valid: true, removed: true},
+		{name: "complete decimal weights", value: weights(380.25, 400, 320.5, 350), valid: true},
+		{name: "partial", value: &WeightDistribution{FrontLeftG: floatPtr(1)}, valid: false},
+		{name: "zero", value: weights(0, 1, 1, 1), valid: false},
+		{name: "negative", value: weights(1, -1, 1, 1), valid: false},
+		{name: "nan", value: weights(math.NaN(), 1, 1, 1), valid: false},
+		{name: "infinite", value: weights(1, 1, math.Inf(1), 1), valid: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := DataV1{WeightDistribution: tc.value}
+			err := normalizeData(&data)
+			if (err == nil) != tc.valid {
+				t.Fatalf("normalize error = %v", err)
+			}
+			if tc.removed && data.WeightDistribution != nil {
+				t.Fatal("empty measurement was not pruned")
+			}
+			if tc.name == "complete decimal weights" {
+				raw, err := json.Marshal(data)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !strings.Contains(string(raw), `"battery_installed":false`) || !strings.Contains(string(raw), `"body_installed":true`) || !strings.Contains(string(raw), `"front_left_g":380.25`) {
+					t.Fatalf("explicit conditions or precision lost: %s", raw)
+				}
+			}
+		})
+	}
+}

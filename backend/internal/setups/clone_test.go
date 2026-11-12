@@ -15,7 +15,7 @@ func TestClonePublicSetupIndependenceAndReceipts(t *testing.T) {
 	ctx := context.Background()
 	source := f.public[0]
 	// Preserve the original JSONB, including legacy unknowns, explicit zero and precision.
-	raw := `{"suspension":{"front":{"toe_deg":0,"camber_deg":-3.123456789,"link_lengths":[{"name":"Legacy unknown","length_mm":null}]}},"electronics":{"motor":"Motor"},"running_gear":{"rear":{"wheel":{"offset_mm":0}}}}`
+	raw := `{"suspension":{"front":{"toe_deg":0,"camber_deg":-3.123456789,"link_lengths":[{"name":"Legacy unknown","length_mm":null}]}},"electronics":{"motor":"Motor"},"running_gear":{"rear":{"wheel":{"offset_mm":0}}},"weight_distribution":{"front_left_g":380.25,"front_right_g":400,"rear_left_g":320,"rear_right_g":350,"body_installed":true,"battery_installed":false}}`
 	if _, err := f.pool.Exec(ctx, `UPDATE setups SET title=$2,data=$3,notes='Notes' WHERE id=$1`, source.ID, strings.Repeat("界", 150), raw); err != nil {
 		t.Fatal(err)
 	}
@@ -34,6 +34,9 @@ func TestClonePublicSetupIndependenceAndReceipts(t *testing.T) {
 	clone, err := f.service.Clone(ctx, f.other.ID, source.ID, CloneInput{request})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if clone.Data.WeightDistribution == nil || clone.Data.WeightDistribution.FrontLeftG == nil || *clone.Data.WeightDistribution.FrontLeftG != 380.25 || !clone.Data.WeightDistribution.BodyInstalled || clone.Data.WeightDistribution.BatteryInstalled {
+		t.Fatal("clone did not preserve weight distribution", clone.Data.WeightDistribution)
 	}
 	if clone.ID == source.ID || clone.OwnerID != f.other.ID || clone.Visibility != Private || clone.ModerationStatus != Pending || clone.CoverPhoto != nil || clone.SourceSetupID == nil || *clone.SourceSetupID != source.ID || clone.Title != strings.Repeat("界", 143)+" (Copy)" || clone.ChassisModelID == nil || *clone.ChassisModelID != *source.ChassisModelID || clone.Notes == nil || *clone.Notes != "Notes" {
 		t.Fatal(clone)
