@@ -40,7 +40,7 @@ func TestPostgreSQLSchema(t *testing.T) {
 	}
 	var version int64
 	version, err = provider.GetDBVersion(ctx)
-	if err != nil || version != 11 {
+	if err != nil || version != 12 {
 		t.Fatalf("migration version: %d %v", version, err)
 	}
 
