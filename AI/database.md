@@ -26,6 +26,10 @@ id DESC)` keyset index from [00008](../backend/migrations/00008_visible_setup_or
 existing owner/visibility indexes and the unique unordered friendship-pair index.
 Both comparison sides authorize in one statement snapshot before full projections;
 no persistent comparison table or write transaction is introduced.
+Manufacturer display joins compare JSONB references with `chassis_brands.id::text`.
+The unique expression index in [00012](../backend/migrations/00012_manufacturer_projection_index.sql)
+preserves that comparison while exposing one-match cardinality to the planner,
+avoiding compounded row estimates and unnecessary JIT on small setup lists.
 Do not add a general JSONB GIN index without an actual JSON-field search requirement.
 
 ## Schema-v1 evolution and atomicity
